@@ -48,9 +48,18 @@ export function NoteGrid({
       return
     }
 
-    await mutate({ endpoint: '/api/notes', method: 'POST', operation: 'INSERT', payload: notes })
+    const res = await mutate({ endpoint: '/api/notes', method: 'POST', operation: 'INSERT', payload: notes })
     setEnregistrement(false)
-    setMessage(`${notes.length} note(s) enregistrée(s).`)
+
+    if (res?.error) {
+      setMessage("Échec de l'enregistrement — vérifiez les valeurs et réessayez.")
+      return
+    }
+    setMessage(
+      res?.queued
+        ? `${notes.length} note(s) enregistrée(s) localement — en attente de synchronisation.`
+        : `${notes.length} note(s) enregistrée(s).`
+    )
     setValeurs({})
   }
 

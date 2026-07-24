@@ -17,11 +17,12 @@ export function useOfflineData() {
 
     async function rafraichirCache() {
       try {
-        const [elevesRes, classesRes, matieresRes, configRes] = await Promise.all([
+        const [elevesRes, classesRes, matieresRes, configRes, paiementsRes] = await Promise.all([
           fetch('/api/eleves'),
           fetch('/api/classes'),
           fetch('/api/matieres'),
           fetch('/api/config'),
+          fetch('/api/paiements'),
         ])
 
         if (elevesRes.ok) {
@@ -43,6 +44,10 @@ export function useOfflineData() {
             value: String(value),
           }))
           await localDB.config.bulkPut(entries)
+        }
+        if (paiementsRes.ok) {
+          const paiements = await paiementsRes.json()
+          await localDB.paiements.bulkPut(paiements)
         }
       } catch {
         // Échec silencieux — le cache existant reste disponible.

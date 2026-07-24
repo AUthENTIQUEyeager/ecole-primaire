@@ -3,13 +3,15 @@
 import { useState, useMemo } from 'react'
 import { X, Loader2 } from 'lucide-react'
 import { mutate } from '@/lib/sync/syncManager'
-import { formatFCFA } from '@/lib/utils/paiement'
+import { formatFCFA, repartirVersement, computeStatut, type StatutPaiement } from '@/lib/utils/paiement'
 
-interface TrancheInfo {
+export interface TrancheInfo {
+  id: string
   tranche: number
   montant_du: number
   montant_paye: number
-  statut: string
+  date_echeance: string
+  statut: StatutPaiement
 }
 
 interface VersementModalProps {
@@ -17,7 +19,12 @@ interface VersementModalProps {
   eleveNom: string
   tranches: TrancheInfo[]
   onClose: () => void
-  onSuccess: (numeroRecu: string) => void
+  /**
+   * Appelé avec les tranches déjà recalculées localement (optimiste) —
+   * s'applique immédiatement, connexion ou non. `queued` indique si
+   * l'enregistrement est en attente de synchronisation.
+   */
+  onSuccess: (info: { nouvellesTranches: TrancheInfo[]; queued: boolean; numeroRecu?: string }) => void
 }
 
 export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess }: VersementModalProps) {
@@ -49,6 +56,22 @@ export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess
     }
 
     setChargement(true)
+
+    // Calcul optimiste : on applique tout de suite la même logique de
+    // répartition/débordement que le serveur, pour que le "reste à payer"
+    // se mette à jour instantanément, connexion ou non.
+    const repartitions = repartirVersement(tranchesImpayees, montantNum, trancheChoisie)
+    const today = new Date()
+    const nouvellesTranches: TrancheInfo[] = tranches.map((t) => {
+      const r = repartitions.find((rep) => rep.trancheId === t.id)
+      if (!r) return t
+      return {
+        ...t,
+        montant_paye: r.nouveauMontantPaye,
+        statut: computeStatut(r.nouveauMontantPaye, t.montant_du, t.date_echeance, today),
+      }
+    })
+
     const res = await mutate({
       endpoint: '/api/versements',
       method: 'POST',
@@ -56,7 +79,7 @@ export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess
       payload: {
         eleve_id: eleveId,
         montant: montantNum,
-        date_versement: new Date().toISOString().slice(0, 10),
+        date_versement: today.toISOString().slice(0, 10),
         mode_paiement: mode,
         caissier_nom: caissier,
         tranche_depart: trancheChoisie,
@@ -64,15 +87,15 @@ export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess
     })
     setChargement(false)
 
-    if (res.queued) {
-      onSuccess('en attente de synchronisation')
+    if (res?.error) {
+      setErreur("Erreur lors de l'enregistrement. Réessayez.")
       return
     }
-    if (res.error) {
-      setErreur("Erreur lors de l'enregistrement.")
-      return
-    }
-    onSuccess(res.numero_recu)
+    onSuccess({
+      nouvellesTranches,
+      queued: !!res?.queued,
+      numeroRecu: res?.numero_recu,
+    })
   }
 
   if (tranchesImpayees.length === 0) {

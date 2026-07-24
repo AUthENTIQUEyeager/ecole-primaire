@@ -43,6 +43,57 @@ et appliquent la logique métier exacte (répartition des versements avec
 débordement de tranche, calcul du statut de paiement, moyennes/rangs,
 génération matricule/reçu, journal d'activité).
 
+## Fonctionnalités ajoutées après la première livraison
+
+- **Matières & coefficients modifiables** depuis Configuration (ajout, édition, suppression)
+- **Logo de l'école** uploadable dans Configuration — apparaît automatiquement sur tous les
+  documents PDF (reçu, bulletin, billet, carte, convocation)
+- **Bouton Imprimer** à côté de Télécharger sur tous les documents PDF (composant partagé
+  `components/documents/PDFActions.tsx`, utilise `usePDF` de react-pdf)
+- **Photo élève facultative** (upload dans le formulaire, affichée sur la fiche et la carte scolaire)
+- **Modification d'un élève** (bouton "Modifier" sur sa fiche, même formulaire que l'ajout)
+- **Modification de l'enseignant principal d'une classe** (crayon sur la carte classe)
+- **Modification d'un enseignant dans Salaires** (nom, matière, montant)
+- **Versement : choix explicite de la tranche** avant de saisir le montant (le débordement
+  vers les tranches suivantes reste automatique si le montant dépasse le reste dû)
+- **Montant restant affiché** dans les listes Élèves et Paiements
+- **Rang réel dans le bulletin** (calculé à partir des moyennes de toute la classe, plus un
+  placeholder) + **appréciation générale éditable** avant génération du PDF
+
+Aucune migration de base de données n'est nécessaire pour ces ajouts — les nouveaux champs
+(logo, photo) utilisent des colonnes/texte déjà prévus dans le schéma initial.
+
+## Correctifs offline-first (après retour utilisateur)
+
+- **Crash `crypto.randomUUID is not a function` en mode hors ligne** — corrigé :
+  `lib/sync/syncManager.ts` utilisait l'import Node.js `crypto`, qui ne fonctionne
+  pas dans le navigateur. Remplacé par l'API Web Crypto native (`crypto.randomUUID()`).
+- **Actions non reflétées sans connexion** — la plupart des écrans dépendaient d'un
+  `router.refresh()` ou `window.location.reload()` après chaque action, ce qui
+  nécessite le réseau et ne fonctionne pas hors ligne. Tous les écrans suivants
+  tiennent maintenant leur propre état local et l'appliquent en optimiste, avant
+  même la réponse du serveur : Élèves (ajout/édition), Paiements (versement,
+  recalcul réel des tranches via `repartirVersement`), Matières, Annonces,
+  Dépenses (avec totaux du mois), Salaires, Classes (enseignant principal), Notes.
+- **`mutate()` distingue maintenant clairement** : une vraie coupure réseau (mise
+  en file d'attente IndexedDB, synchronisée au retour de connexion) d'un refus du
+  serveur (erreur affichée immédiatement, jamais mise en file silencieusement).
+- **Nouvelle route `/api/paiements`** + mise à jour de `useOfflineData` : toutes
+  les tranches de paiement de tous les élèves sont mises en cache local au
+  chargement, pour pouvoir enregistrer un versement hors ligne même pour un
+  élève dont la fiche n'a jamais été ouverte.
+- Chaque élément ajouté/modifié hors connexion affiche un badge **"en attente"**
+  jusqu'à sa synchronisation.
+
+### Limite connue
+
+Les pages listées (dashboard, élèves, classes, etc.) sont des Server Components
+qui lisent Turso directement — elles ne se re-rendent donc pas depuis le cache
+local hors ligne au chargement initial d'une page (il faut avoir déjà chargé la
+page en ligne au moins une fois dans la session). Une fois la page chargée,
+en revanche, toutes les actions qu'on y fait restent utilisables et visibles
+sans connexion grâce aux correctifs ci-dessus.
+
 ## Ce qui reste à faire avant la mise en production
 
 - **Connecter de vrais identifiants Turso/Upstash** — le code compile et

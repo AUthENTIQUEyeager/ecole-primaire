@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { User, Wallet, CalendarX, BookOpen, Printer, Pencil } from 'lucide-react'
 import { LABELS_STATUT, COULEURS_STATUT, formatFCFA, type StatutPaiement } from '@/lib/utils/paiement'
-import { VersementModal } from '@/components/paiements/VersementModal'
+import { VersementModal, type TrancheInfo } from '@/components/paiements/VersementModal'
 import { EleveForm } from './EleveForm'
 
 interface EleveDetailProps {
@@ -19,8 +18,11 @@ interface EleveDetailProps {
 const TABS = ['profil', 'notes', 'absences', 'paiements'] as const
 type Tab = (typeof TABS)[number]
 
-export function EleveDetail({ eleve, paiements, versements, absences, notes, classes }: EleveDetailProps) {
-  const router = useRouter()
+export function EleveDetail({ eleve: eleveInitial, paiements: paiementsInitiaux, versements: versementsInitiaux, absences, notes, classes }: EleveDetailProps) {
+  const [eleve, setEleve] = useState(eleveInitial)
+  const [paiements, setPaiements] = useState<TrancheInfo[]>(paiementsInitiaux)
+  const [versements, setVersements] = useState(versementsInitiaux)
+  const [versementEnAttente, setVersementEnAttente] = useState(false)
   const [tab, setTab] = useState<Tab>('profil')
   const [modalOuvert, setModalOuvert] = useState(false)
   const [formOuvert, setFormOuvert] = useState(false)
@@ -171,7 +173,12 @@ export function EleveDetail({ eleve, paiements, versements, absences, notes, cla
             })}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            {versementEnAttente ? (
+              <span className="badge bg-amber-100 text-amber-700">
+                Dernier versement en attente de synchronisation
+              </span>
+            ) : <span />}
             <button className="btn-primary" onClick={() => setModalOuvert(true)}>
               <Wallet size={16} /> Enregistrer un versement
             </button>
@@ -212,9 +219,9 @@ export function EleveDetail({ eleve, paiements, versements, absences, notes, cla
           classes={classes}
           eleve={eleve}
           onClose={() => setFormOuvert(false)}
-          onSuccess={() => {
+          onSuccess={(champsModifies) => {
+            setEleve((prev: any) => ({ ...prev, ...champsModifies }))
             setFormOuvert(false)
-            router.refresh()
           }}
         />
       )}
@@ -225,9 +232,21 @@ export function EleveDetail({ eleve, paiements, versements, absences, notes, cla
           eleveNom={`${eleve.prenom} ${eleve.nom}`}
           tranches={paiements}
           onClose={() => setModalOuvert(false)}
-          onSuccess={() => {
+          onSuccess={({ nouvellesTranches, queued, numeroRecu }) => {
+            setPaiements(nouvellesTranches)
+            setVersements((prev) => [
+              {
+                id: `local-${Date.now()}`,
+                numero_recu: numeroRecu ?? 'en attente',
+                date_versement: new Date().toISOString().slice(0, 10),
+                montant: nouvellesTranches.reduce((a, t, i) => a + (t.montant_paye - paiements[i].montant_paye), 0),
+                mode_paiement: 'especes',
+                caissier_nom: '—',
+              },
+              ...prev,
+            ])
+            setVersementEnAttente(queued)
             setModalOuvert(false)
-            window.location.reload()
           }}
         />
       )}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Loader2, X, User } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
+import { mutate, genererId } from '@/lib/sync/syncManager'
 import { redimensionnerImage } from '@/lib/utils/image'
 
 interface Classe {
@@ -29,7 +29,7 @@ interface EleveFormProps {
   classes: Classe[]
   eleve?: EleveExistant
   onClose: () => void
-  onSuccess: () => void
+  onSuccess: (resultat: Record<string, any>) => void
 }
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024 // limite sur le fichier SOURCE ; il est ensuite compressé
@@ -102,11 +102,29 @@ export function EleveForm({ classes, eleve, onClose, onSuccess }: EleveFormProps
         })
     setChargement(false)
 
-    if (res.error) {
+    if (res?.error) {
       setErreur('Erreur lors de l’enregistrement. Vérifiez les champs.')
       return
     }
-    onSuccess()
+
+    const classeNom = classes.find((c) => c.id === form.classe_id)?.nom ?? ''
+
+    if (modeEdition) {
+      // Édition : on renvoie directement les champs saisis, la fiche s'actualise
+      // immédiatement (connexion ou non).
+      onSuccess({ ...payload, classe_nom: classeNom, queued: !!res?.queued })
+    } else {
+      // Ajout : le matricule réel est généré par le serveur. Hors connexion,
+      // on affiche un repère temporaire ; il sera remplacé à la synchronisation.
+      onSuccess({
+        ...payload,
+        id: res?.id ?? genererId(),
+        matricule: res?.matricule ?? 'En attente de synchronisation',
+        classe_nom: classeNom,
+        actif: 1,
+        queued: !!res?.queued,
+      })
+    }
   }
 
   return (

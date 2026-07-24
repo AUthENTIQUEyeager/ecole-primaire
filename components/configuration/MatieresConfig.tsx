@@ -1,9 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Save, Loader2 } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
+import { mutate, genererId } from '@/lib/sync/syncManager'
 
 interface Matiere {
   id: string
@@ -13,13 +12,14 @@ interface Matiere {
 }
 
 export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
-  const router = useRouter()
   const [lignes, setLignes] = useState(matieres)
+  const [enAttenteIds, setEnAttenteIds] = useState<Set<string>>(new Set())
   const [enregistrementId, setEnregistrementId] = useState<string | null>(null)
   const [afficherForm, setAfficherForm] = useState(false)
   const [nom, setNom] = useState('')
   const [code, setCode] = useState('')
   const [coefficient, setCoefficient] = useState('1')
+  const [erreur, setErreur] = useState<string | null>(null)
 
   function updateLigne(id: string, field: 'nom' | 'coefficient', value: string) {
     setLignes((prev) =>
@@ -29,32 +29,62 @@ export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
 
   async function enregistrerLigne(m: Matiere) {
     setEnregistrementId(m.id)
-    await mutate({
+    const res = await mutate({
       endpoint: `/api/matieres/${m.id}`,
       method: 'PUT',
       operation: 'UPDATE',
       payload: { nom: m.nom, coefficient: m.coefficient },
     })
     setEnregistrementId(null)
+    if (res?.error) {
+      setErreur("Échec de l'enregistrement de cette matière.")
+      return
+    }
+    setErreur(null)
   }
 
   async function supprimer(id: string) {
     if (!confirm('Supprimer cette matière ?')) return
-    await mutate({ endpoint: `/api/matieres/${id}`, method: 'DELETE', operation: 'DELETE', payload: {} })
+    // Optimiste : on retire tout de suite de la liste locale.
+    const sauvegarde = lignes
     setLignes((prev) => prev.filter((m) => m.id !== id))
+    const res = await mutate({ endpoint: `/api/matieres/${id}`, method: 'DELETE', operation: 'DELETE', payload: {} })
+    if (res?.error) {
+      setErreur('Échec de la suppression — la matière a été remise dans la liste.')
+      setLignes(sauvegarde)
+    }
   }
 
   async function ajouter() {
     if (!nom || !code) return
-    await mutate({
+    const id = genererId()
+    const nouvelleMatiere: Matiere = { id, nom, code, coefficient: Number(coefficient) || 1 }
+
+    // Optimiste : affichée immédiatement, connexion ou non.
+    setLignes((prev) => [...prev, nouvelleMatiere])
+    setAfficherForm(false)
+    setNom(''); setCode(''); setCoefficient('1')
+
+    const res = await mutate({
       endpoint: '/api/matieres',
       method: 'POST',
       operation: 'INSERT',
-      payload: { nom, code, coefficient: Number(coefficient) || 1 },
+      payload: { nom, code, coefficient: nouvelleMatiere.coefficient },
     })
-    setAfficherForm(false)
-    setNom(''); setCode(''); setCoefficient('1')
-    router.refresh()
+
+    if (res?.error) {
+      setErreur("Échec de l'ajout de cette matière.")
+      setLignes((prev) => prev.filter((m) => m.id !== id))
+      return
+    }
+    if (res?.queued) {
+      setEnAttenteIds((prev) => new Set(prev).add(id))
+      return
+    }
+    // Succès en ligne : on remplace l'id temporaire par le vrai id serveur.
+    if (res?.id) {
+      setLignes((prev) => prev.map((m) => (m.id === id ? { ...m, id: res.id } : m)))
+    }
   }
 
   return (
@@ -98,7 +128,12 @@ export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
                     onChange={(e) => updateLigne(m.id, 'nom', e.target.value)}
                   />
                 </td>
-                <td className="px-3 py-1.5 text-muted">{m.code}</td>
+                <td className="px-3 py-1.5 text-muted">
+                  {m.code}
+                  {enAttenteIds.has(m.id) && (
+                    <span className="badge ml-2 bg-amber-100 text-amber-700">en attente</span>
+                  )}
+                </td>
                 <td className="px-3 py-1.5">
                   <input
                     type="number"
@@ -138,6 +173,7 @@ export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
         Les modifications de coefficient s'appliquent aux futurs calculs de moyenne — les bulletins déjà
         générés ne sont pas recalculés rétroactivement.
       </p>
+      {erreur && <p className="text-sm text-danger">{erreur}</p>}
     </div>
   )
 }

@@ -1,5 +1,23 @@
-import { randomUUID } from 'crypto'
 import { localDB, type QueueItem } from './indexedDB'
+
+/**
+ * Génère un identifiant unique. Ce fichier tourne dans le navigateur
+ * (composants 'use client'), donc on utilise l'API Web Crypto globale
+ * (`crypto.randomUUID()`, supportée nativement par tous les navigateurs
+ * modernes) plutôt que le module Node.js `crypto`, qui ne se résout pas
+ * correctement une fois empaqueté pour le navigateur.
+ */
+export function genererId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // Repli pour d'anciens navigateurs sans crypto.randomUUID.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 interface MutationOptions {
   endpoint: string
@@ -55,7 +73,7 @@ export async function mutate({ endpoint, method, payload, operation }: MutationO
 async function enqueue({ endpoint, method, payload, operation }: MutationOptions) {
   if (!localDB) return
   const item: QueueItem = {
-    id: randomUUID(),
+    id: genererId(),
     operation,
     endpoint,
     method,

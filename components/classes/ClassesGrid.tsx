@@ -12,10 +12,13 @@ interface Classe {
   enseignant_principal?: string
 }
 
-export function ClassesGrid({ classes }: { classes: Classe[] }) {
+export function ClassesGrid({ classes: classesInitiales }: { classes: Classe[] }) {
   const router = useRouter()
+  const [classes, setClasses] = useState(classesInitiales)
   const [editionId, setEditionId] = useState<string | null>(null)
   const [enseignant, setEnseignant] = useState('')
+  const [enAttenteIds, setEnAttenteIds] = useState<Set<string>>(new Set())
+  const [erreur, setErreur] = useState<string | null>(null)
 
   function commencerEdition(c: Classe) {
     setEditionId(c.id)
@@ -23,19 +26,34 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
   }
 
   async function enregistrer(id: string) {
-    await mutate({
+    const ancien = classes.find((c) => c.id === id)?.enseignant_principal
+    // Optimiste : la carte reflète le changement tout de suite.
+    setClasses((prev) => prev.map((c) => (c.id === id ? { ...c, enseignant_principal: enseignant || undefined } : c)))
+    setEditionId(null)
+
+    const res = await mutate({
       endpoint: `/api/classes/${id}`,
       method: 'PUT',
       operation: 'UPDATE',
       payload: { enseignant_principal: enseignant || undefined },
     })
-    setEditionId(null)
-    router.refresh()
+
+    if (res?.error) {
+      setErreur("Échec de l'enregistrement — enseignant remis à sa valeur précédente.")
+      setClasses((prev) => prev.map((c) => (c.id === id ? { ...c, enseignant_principal: ancien } : c)))
+      return
+    }
+    setErreur(null)
+    if (res?.queued) {
+      setEnAttenteIds((prev) => new Set(prev).add(id))
+    }
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {classes.map((c) => (
+    <div className="space-y-3">
+      {erreur && <p className="text-sm text-danger">{erreur}</p>}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {classes.map((c) => (
         <div key={c.id} className="card flex items-center gap-4 p-4">
           <div
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-card bg-blue-50 text-primary cursor-pointer"
@@ -74,6 +92,7 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
                 <p className="text-sm text-muted">
                   {c.enseignant_principal || 'Enseignant principal non renseigné'}
                 </p>
+                {enAttenteIds.has(c.id) && <span className="badge bg-amber-100 text-amber-700">en attente</span>}
                 <button
                   className="rounded-input p-1 text-muted hover:bg-slate-50 hover:text-primary"
                   onClick={() => commencerEdition(c)}
@@ -86,6 +105,7 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
           </div>
         </div>
       ))}
+      </div>
     </div>
   )
 }
