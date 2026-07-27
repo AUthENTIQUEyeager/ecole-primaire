@@ -1,0 +1,1 @@
+(()=>{"use strict";self.fallback=async a=>"document"===a.destination?caches.match("/admin/dashboard",{ignoreSearch:!0}):Response.error()})();

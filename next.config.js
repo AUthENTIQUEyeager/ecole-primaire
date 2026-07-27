@@ -1,44 +1,32 @@
+// Cache par défaut de next-pwa : couvre polices, images, JS, CSS, et surtout
+// les pages elles-mêmes (règle "others", requêtes de navigation) — c'est ce
+// qui permet d'OUVRIR l'app sans réseau, pas seulement de lire ses données.
+// Ne JAMAIS remplacer ce tableau par une liste personnalisée sans le fusionner :
+// next-pwa écrase, il ne complète pas.
+const runtimeCaching = require('next-pwa/cache')
+
 const withPWA = require('next-pwa')({
   dest: 'public',
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
   runtimeCaching: [
+    // Le pull complet des données doit toujours essayer le réseau d'abord
+    // (données fraîches), mais échouer vite s'il n'y a pas de connexion —
+    // pullToutesLesDonnees() gère déjà lui-même l'échec proprement.
     {
-      urlPattern: /\/api\/eleves/,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'api-eleves',
-        expiration: { maxAgeSeconds: 3600 },
-        networkTimeoutSeconds: 5,
-      },
+      urlPattern: /\/api\/sync\/pull/,
+      handler: 'NetworkOnly',
+      options: {},
     },
-    {
-      urlPattern: /\/api\/classes/,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'api-classes',
-        expiration: { maxAgeSeconds: 86400 },
-      },
-    },
-    {
-      urlPattern: /\/api\/config/,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'api-config',
-        expiration: { maxAgeSeconds: 86400 },
-      },
-    },
-    {
-      urlPattern: /\/api\/(paiements|absences|notes)/,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'api-mutable',
-        expiration: { maxAgeSeconds: 1800 },
-        networkTimeoutSeconds: 5,
-      },
-    },
+    ...runtimeCaching,
   ],
+  // Si une page jamais visitée en ligne est demandée hors connexion (lien
+  // profond, favori), on retombe sur le tableau de bord plutôt que sur
+  // l'écran d'erreur du navigateur.
+  fallbacks: {
+    document: '/admin/dashboard',
+  },
 })
 
 /** @type {import('next').NextConfig} */
