@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Plus, Trash2, Save, Loader2 } from 'lucide-react'
-import { mutate, genererId } from '@/lib/sync/syncManager'
+import { matiereRepo } from '@/lib/localdb/repo'
 
 interface Matiere {
   id: string
@@ -11,9 +11,11 @@ interface Matiere {
   coefficient: number
 }
 
+// `matieres` vient d'une requête Dexie réactive dans la page parente. Un
+// tampon local ne garde que les modifications EN COURS DE SAISIE (pas encore
+// enregistrées) pour ne pas perdre la frappe pendant qu'on tape.
 export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
-  const [lignes, setLignes] = useState(matieres)
-  const [enAttenteIds, setEnAttenteIds] = useState<Set<string>>(new Set())
+  const [buffer, setBuffer] = useState<Record<string, { nom: string; coefficient: number }>>({})
   const [enregistrementId, setEnregistrementId] = useState<string | null>(null)
   const [afficherForm, setAfficherForm] = useState(false)
   const [nom, setNom] = useState('')
@@ -21,70 +23,47 @@ export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
   const [coefficient, setCoefficient] = useState('1')
   const [erreur, setErreur] = useState<string | null>(null)
 
-  function updateLigne(id: string, field: 'nom' | 'coefficient', value: string) {
-    setLignes((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, [field]: field === 'coefficient' ? Number(value) : value } : m))
-    )
+  function valeur(m: Matiere) {
+    return buffer[m.id] ?? { nom: m.nom, coefficient: m.coefficient }
+  }
+
+  function updateLigne(id: string, field: 'nom' | 'coefficient', value: string, base: Matiere) {
+    const actuel = valeur(base)
+    setBuffer((prev) => ({ ...prev, [id]: { ...actuel, [field]: field === 'coefficient' ? Number(value) : value } }))
   }
 
   async function enregistrerLigne(m: Matiere) {
     setEnregistrementId(m.id)
-    const res = await mutate({
-      endpoint: `/api/matieres/${m.id}`,
-      method: 'PUT',
-      operation: 'UPDATE',
-      payload: { nom: m.nom, coefficient: m.coefficient },
-    })
+    const v = valeur(m)
+    const res = await matiereRepo.update(m.id, { nom: v.nom, coefficient: v.coefficient })
     setEnregistrementId(null)
     if (res?.error) {
       setErreur("Échec de l'enregistrement de cette matière.")
       return
     }
     setErreur(null)
+    setBuffer((prev) => {
+      const { [m.id]: _, ...reste } = prev
+      return reste
+    })
   }
 
   async function supprimer(id: string) {
     if (!confirm('Supprimer cette matière ?')) return
-    // Optimiste : on retire tout de suite de la liste locale.
-    const sauvegarde = lignes
-    setLignes((prev) => prev.filter((m) => m.id !== id))
-    const res = await mutate({ endpoint: `/api/matieres/${id}`, method: 'DELETE', operation: 'DELETE', payload: {} })
-    if (res?.error) {
-      setErreur('Échec de la suppression — la matière a été remise dans la liste.')
-      setLignes(sauvegarde)
-    }
+    const res = await matiereRepo.remove(id)
+    if (res?.error) setErreur('Échec de la suppression.')
   }
 
   async function ajouter() {
     if (!nom || !code) return
-    const id = genererId()
-    const nouvelleMatiere: Matiere = { id, nom, code, coefficient: Number(coefficient) || 1 }
-
-    // Optimiste : affichée immédiatement, connexion ou non.
-    setLignes((prev) => [...prev, nouvelleMatiere])
     setAfficherForm(false)
-    setNom(''); setCode(''); setCoefficient('1')
-
-    const res = await mutate({
-      endpoint: '/api/matieres',
-      method: 'POST',
-      operation: 'INSERT',
-      payload: { nom, code, coefficient: nouvelleMatiere.coefficient },
-    })
-
+    const res = await matiereRepo.create({ nom, code, coefficient: Number(coefficient) || 1 })
     if (res?.error) {
       setErreur("Échec de l'ajout de cette matière.")
-      setLignes((prev) => prev.filter((m) => m.id !== id))
       return
     }
-    if (res?.queued) {
-      setEnAttenteIds((prev) => new Set(prev).add(id))
-      return
-    }
-    // Succès en ligne : on remplace l'id temporaire par le vrai id serveur.
-    if (res?.id) {
-      setLignes((prev) => prev.map((m) => (m.id === id ? { ...m, id: res.id } : m)))
-    }
+    setErreur(null)
+    setNom(''); setCode(''); setCoefficient('1')
   }
 
   return (
@@ -119,51 +98,49 @@ export function MatieresConfig({ matieres }: { matieres: Matiere[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {lignes.map((m) => (
-              <tr key={m.id}>
-                <td className="px-3 py-1.5">
-                  <input
-                    className="input-field"
-                    value={m.nom}
-                    onChange={(e) => updateLigne(m.id, 'nom', e.target.value)}
-                  />
-                </td>
-                <td className="px-3 py-1.5 text-muted">
-                  {m.code}
-                  {enAttenteIds.has(m.id) && (
-                    <span className="badge ml-2 bg-amber-100 text-amber-700">en attente</span>
-                  )}
-                </td>
-                <td className="px-3 py-1.5">
-                  <input
-                    type="number"
-                    min={1}
-                    className="input-field w-20"
-                    value={m.coefficient}
-                    onChange={(e) => updateLigne(m.id, 'coefficient', e.target.value)}
-                  />
-                </td>
-                <td className="px-3 py-1.5">
-                  <div className="flex justify-end gap-1">
-                    <button
-                      className="rounded-input p-1.5 text-primary hover:bg-blue-50"
-                      onClick={() => enregistrerLigne(m)}
-                      title="Enregistrer"
-                    >
-                      {enregistrementId === m.id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                    </button>
-                    <button
-                      className="rounded-input p-1.5 text-danger hover:bg-red-50"
-                      onClick={() => supprimer(m.id)}
-                      title="Supprimer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {lignes.length === 0 && (
+            {matieres.map((m) => {
+              const v = valeur(m)
+              return (
+                <tr key={m.id}>
+                  <td className="px-3 py-1.5">
+                    <input
+                      className="input-field"
+                      value={v.nom}
+                      onChange={(e) => updateLigne(m.id, 'nom', e.target.value, m)}
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 text-muted">{m.code}</td>
+                  <td className="px-3 py-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      className="input-field w-20"
+                      value={v.coefficient}
+                      onChange={(e) => updateLigne(m.id, 'coefficient', e.target.value, m)}
+                    />
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex justify-end gap-1">
+                      <button
+                        className="rounded-input p-1.5 text-primary hover:bg-blue-50"
+                        onClick={() => enregistrerLigne(m)}
+                        title="Enregistrer"
+                      >
+                        {enregistrementId === m.id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      </button>
+                      <button
+                        className="rounded-input p-1.5 text-danger hover:bg-red-50"
+                        onClick={() => supprimer(m.id)}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+            {matieres.length === 0 && (
               <tr><td colSpan={4} className="px-3 py-6 text-center text-muted">Aucune matière.</td></tr>
             )}
           </tbody>

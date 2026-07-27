@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Receipt, BookOpen, CalendarX, Mail, CreditCard } from 'lucide-react'
+import { localDB } from '@/lib/sync/indexedDB'
 import { RecuDocument } from '@/components/paiements/RecuPDF'
 import { BulletinDocument } from '@/components/notes/BulletinPDF'
 import { BilletDocument } from './BilletPDF'
@@ -39,31 +41,50 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
   const eleve = eleves.find((e) => e.id === eleveId)
   const logoUrl = config.logo_url || undefined
 
-  const [versements, setVersements] = useState<any[]>([])
-  const [paiements, setPaiements] = useState<any[]>([])
-  const [absences, setAbsences] = useState<any[]>([])
-  const [notes, setNotes] = useState<any[]>([])
-  const [periode, setPeriode] = useState<'T1' | 'T2' | 'T3'>('T1')
-  const [notesClasse, setNotesClasse] = useState<any[]>([])
-  const [appreciation, setAppreciation] = useState('')
-
-  useEffect(() => {
-    if (!eleveId) return
-    fetch(`/api/eleves/${eleveId}/paiements`).then((r) => r.json()).then((d) => {
-      setVersements(d.versements ?? [])
-      setPaiements(d.paiements ?? [])
-    })
-    fetch(`/api/eleves/${eleveId}/absences`).then((r) => r.json()).then(setAbsences)
-    fetch(`/api/eleves/${eleveId}/notes`).then((r) => r.json()).then(setNotes)
+  // Lecture locale (Dexie) — plus aucun fetch réseau pour afficher/imprimer un document.
+  const donneesEleve = useLiveQuery(async () => {
+    if (!localDB || !eleveId) return null
+    const [versements, paiements, absences, notes, matieres] = await Promise.all([
+      localDB.versements.where('eleve_id').equals(eleveId).toArray(),
+      localDB.paiements.where('eleve_id').equals(eleveId).toArray(),
+      localDB.absences.where('eleve_id').equals(eleveId).toArray(),
+      localDB.notes.where('eleve_id').equals(eleveId).toArray(),
+      localDB.matieres.toArray(),
+    ])
+    const matieresById = new Map(matieres.map((m) => [m.id, m]))
+    return {
+      versements: versements.sort((a, b) => (a.date_versement < b.date_versement ? 1 : -1)),
+      paiements,
+      absences: absences.sort((a, b) => (a.date_absence < b.date_absence ? 1 : -1)),
+      notes: notes.map((n) => ({
+        ...n,
+        matiere_nom: matieresById.get(n.matiere_id)?.nom ?? '',
+        coefficient: matieresById.get(n.matiere_id)?.coefficient ?? 1,
+      })),
+    }
   }, [eleveId])
 
+  const versements = donneesEleve?.versements ?? []
+  const paiements = donneesEleve?.paiements ?? []
+  const absences = donneesEleve?.absences ?? []
+  const notes = donneesEleve?.notes ?? []
+  const [periode, setPeriode] = useState<'T1' | 'T2' | 'T3'>('T1')
+  const [appreciation, setAppreciation] = useState('')
+
   // Notes de toute la classe pour la période — nécessaire pour calculer le vrai rang.
-  useEffect(() => {
-    if (!eleve || section !== 'bulletin') return
-    fetch(`/api/notes?classe_id=${eleve.classe_id}&periode=${periode}`)
-      .then((r) => r.json())
-      .then(setNotesClasse)
-  }, [eleve, periode, section])
+  const notesClasse = useLiveQuery(async () => {
+    if (!localDB || !eleve || section !== 'bulletin') return []
+    const [notesPeriodeRaw, matieres, elevesClasse] = await Promise.all([
+      localDB.notes.where('periode').equals(periode).toArray(),
+      localDB.matieres.toArray(),
+      localDB.eleves.where('classe_id').equals(eleve.classe_id).toArray(),
+    ])
+    const idsClasse = new Set(elevesClasse.map((e) => e.id))
+    const matieresById = new Map(matieres.map((m) => [m.id, m]))
+    return notesPeriodeRaw
+      .filter((n) => idsClasse.has(n.eleve_id))
+      .map((n) => ({ ...n, coefficient: matieresById.get(n.matiere_id)?.coefficient ?? 1 }))
+  }, [eleve?.classe_id, periode, section]) ?? []
 
   const notesPeriode = notes.filter((n) => n.periode === periode)
   const moyennes = calculerMoyennesParMatiere(

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       sql: `INSERT INTO notes (id, eleve_id, matiere_id, enseignant_nom, valeur, note_sur, type, titre, periode, date_evaluation)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
-        randomUUID(),
+        note.id ?? randomUUID(),
         note.eleve_id,
         note.matiere_id,
         note.enseignant_nom ?? null,

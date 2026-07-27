@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Loader2, X, User } from 'lucide-react'
-import { mutate, genererId } from '@/lib/sync/syncManager'
+import { eleveRepo } from '@/lib/localdb/repo'
 import { redimensionnerImage } from '@/lib/utils/image'
 
 interface Classe {
@@ -88,18 +88,8 @@ export function EleveForm({ classes, eleve, onClose, onSuccess }: EleveFormProps
     }
 
     const res = modeEdition
-      ? await mutate({
-          endpoint: `/api/eleves/${eleve!.id}`,
-          method: 'PUT',
-          operation: 'UPDATE',
-          payload,
-        })
-      : await mutate({
-          endpoint: '/api/eleves',
-          method: 'POST',
-          operation: 'INSERT',
-          payload,
-        })
+      ? await eleveRepo.update(eleve!.id, payload)
+      : await eleveRepo.create(payload as any)
     setChargement(false)
 
     if (res?.error) {
@@ -107,24 +97,9 @@ export function EleveForm({ classes, eleve, onClose, onSuccess }: EleveFormProps
       return
     }
 
-    const classeNom = classes.find((c) => c.id === form.classe_id)?.nom ?? ''
-
-    if (modeEdition) {
-      // Édition : on renvoie directement les champs saisis, la fiche s'actualise
-      // immédiatement (connexion ou non).
-      onSuccess({ ...payload, classe_nom: classeNom, queued: !!res?.queued })
-    } else {
-      // Ajout : le matricule réel est généré par le serveur. Hors connexion,
-      // on affiche un repère temporaire ; il sera remplacé à la synchronisation.
-      onSuccess({
-        ...payload,
-        id: res?.id ?? genererId(),
-        matricule: res?.matricule ?? 'En attente de synchronisation',
-        classe_nom: classeNom,
-        actif: 1,
-        queued: !!res?.queued,
-      })
-    }
+    // L'écriture Dexie a déjà été faite par eleveRepo — la liste et la fiche
+    // se mettent à jour toutes seules via leur requête Dexie réactive.
+    onSuccess(res)
   }
 
   return (

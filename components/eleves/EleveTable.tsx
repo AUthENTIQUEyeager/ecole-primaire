@@ -17,7 +17,6 @@ interface EleveRow {
   sexe: string
   montant_du_total?: number
   montant_paye_total?: number
-  enAttente?: boolean
 }
 
 interface Classe {
@@ -25,9 +24,11 @@ interface Classe {
   nom: string
 }
 
-export function EleveTable({ eleves: elevesInitiaux, classes }: { eleves: EleveRow[]; classes: Classe[] }) {
+// Les données viennent directement d'une requête Dexie réactive (useLiveQuery
+// dans la page parente) : toute écriture locale (ajout, édition) met à jour
+// `eleves` automatiquement, sans état local dupliqué ici.
+export function EleveTable({ eleves, classes }: { eleves: EleveRow[]; classes: Classe[] }) {
   const router = useRouter()
-  const [eleves, setEleves] = useState(elevesInitiaux)
   const [recherche, setRecherche] = useState('')
   const [classeFiltre, setClasseFiltre] = useState('')
   const [afficherForm, setAfficherForm] = useState(false)
@@ -89,7 +90,6 @@ export function EleveTable({ eleves: elevesInitiaux, classes }: { eleves: EleveR
                     <User size={14} />
                   </div>
                   {e.prenom} {e.nom}
-                  {e.enAttente && <span className="badge bg-amber-100 text-amber-700">en attente</span>}
                 </td>
                 <td className="px-4 py-2 text-text">
                   {(() => {
@@ -121,28 +121,7 @@ export function EleveTable({ eleves: elevesInitiaux, classes }: { eleves: EleveR
         <EleveForm
           classes={classes}
           onClose={() => setAfficherForm(false)}
-          onSuccess={(nouveau) => {
-            // Optimiste : le nouvel élève apparaît immédiatement dans la liste,
-            // connexion ou non — les tranches de paiement sont à 0 en attendant
-            // la synchronisation.
-            setEleves((prev) => [
-              {
-                id: nouveau.id,
-                nom: nouveau.nom,
-                prenom: nouveau.prenom,
-                sexe: nouveau.sexe,
-                classe_nom: nouveau.classe_nom,
-                whatsapp_parent: nouveau.whatsapp_parent,
-                statut_medical: nouveau.statut_medical,
-                statut_paiement: 'en_attente',
-                montant_du_total: 0,
-                montant_paye_total: 0,
-                enAttente: nouveau.queued,
-              },
-              ...prev,
-            ])
-            setAfficherForm(false)
-          }}
+          onSuccess={() => setAfficherForm(false)}
         />
       )}
     </div>

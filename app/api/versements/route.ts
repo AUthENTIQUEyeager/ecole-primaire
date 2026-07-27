@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   // La première tranche impactée reçoit le numéro de reçu (les reçus référencent la
   // tranche principale du versement ; le détail des tranches reste dans versements/paiements).
   const numeroRecu = genererNumeroRecu(new Date(data.date_versement))
-  const versementId = randomUUID()
+  const versementId = typeof body.id === 'string' && body.id ? body.id : randomUUID()
 
   await db.execute({
     sql: `INSERT INTO versements (id, eleve_id, paiement_id, montant, date_versement, mode_paiement, numero_recu, caissier_nom)

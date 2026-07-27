@@ -28,6 +28,7 @@ export const absenceSchema = z.object({
 })
 
 export const noteSchema = z.object({
+  id: z.string().optional(),
   eleve_id: z.string().min(1),
   matiere_id: z.string().min(1),
   enseignant_nom: z.string().optional(),

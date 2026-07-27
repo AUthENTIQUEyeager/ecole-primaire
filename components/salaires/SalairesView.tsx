@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, CheckCircle2, Pencil, Save, X } from 'lucide-react'
 import { formatFCFA } from '@/lib/utils/paiement'
-import { mutate, genererId } from '@/lib/sync/syncManager'
+import { salaireRepo } from '@/lib/localdb/repo'
 
 interface Salaire {
   id: string
@@ -14,18 +14,17 @@ interface Salaire {
   statut: 'en_attente' | 'paye'
 }
 
+// `salaires` / `resume` viennent d'une requête Dexie réactive dans la page
+// parente : ajout, modification et "marquer payé" se reflètent automatiquement.
 export function SalairesView({
-  salaires: salairesInitiaux,
-  resume: resumeInitial,
+  salaires,
+  resume,
   moisActuel,
 }: {
   salaires: Salaire[]
   resume: { masse: number; payes: number; en_attente: number }
   moisActuel: string
 }) {
-  const [salaires, setSalaires] = useState(salairesInitiaux)
-  const [resume, setResume] = useState(resumeInitial)
-  const [enAttenteIds, setEnAttenteIds] = useState<Set<string>>(new Set())
   const [afficherForm, setAfficherForm] = useState(false)
   const [nom, setNom] = useState('')
   const [matiere, setMatiere] = useState('')
@@ -38,54 +37,21 @@ export function SalairesView({
     if (!nom || !montant) return
     const montantNum = parseInt(montant, 10)
     if (!montantNum) return
-    const id = genererId()
-    const nouveau: Salaire = {
-      id,
-      enseignant_nom: nom,
-      matiere_principale: matiere || undefined,
-      mois: moisActuel,
-      salaire_net: montantNum,
-      statut: 'en_attente',
-    }
 
-    // Optimiste : visible + comptabilisé immédiatement.
-    setSalaires((prev) => [nouveau, ...prev])
-    setResume((prev) => ({ ...prev, masse: prev.masse + montantNum, en_attente: prev.en_attente + 1 }))
     setAfficherForm(false)
-    setNom(''); setMatiere(''); setMontant('')
-
-    const res = await mutate({
-      endpoint: '/api/salaires',
-      method: 'POST',
-      operation: 'INSERT',
-      payload: { enseignant_nom: nouveau.enseignant_nom, matiere_principale: nouveau.matiere_principale, mois: moisActuel, salaire_net: montantNum },
-    })
+    const res = await salaireRepo.create({ enseignant_nom: nom, matiere_principale: matiere || undefined, mois: moisActuel, salaire_net: montantNum })
 
     if (res?.error) {
       setErreur("Échec de l'ajout de l'enseignant.")
-      setSalaires((prev) => prev.filter((s) => s.id !== id))
-      setResume((prev) => ({ ...prev, masse: prev.masse - montantNum, en_attente: prev.en_attente - 1 }))
       return
     }
     setErreur(null)
-    if (res?.queued) {
-      setEnAttenteIds((prev) => new Set(prev).add(id))
-    } else if (res?.id) {
-      setSalaires((prev) => prev.map((s) => (s.id === id ? { ...s, id: res.id } : s)))
-    }
+    setNom(''); setMatiere(''); setMontant('')
   }
 
   async function marquerPaye(id: string) {
-    // Optimiste
-    setSalaires((prev) => prev.map((s) => (s.id === id ? { ...s, statut: 'paye' } : s)))
-    setResume((prev) => ({ ...prev, payes: prev.payes + 1, en_attente: Math.max(0, prev.en_attente - 1) }))
-
-    const res = await mutate({ endpoint: '/api/salaires', method: 'PUT', operation: 'UPDATE', payload: { id, marquerPaye: true, mode_paiement: 'especes' } })
-    if (res?.error) {
-      setErreur('Échec de la mise à jour du statut.')
-      setSalaires((prev) => prev.map((s) => (s.id === id ? { ...s, statut: 'en_attente' } : s)))
-      setResume((prev) => ({ ...prev, payes: prev.payes - 1, en_attente: prev.en_attente + 1 }))
-    }
+    const res = await salaireRepo.marquerPaye(id)
+    if (res?.error) setErreur('Échec de la mise à jour du statut.')
   }
 
   function commencerEdition(s: Salaire) {
@@ -99,33 +65,13 @@ export function SalairesView({
 
   async function enregistrerEdition(id: string) {
     const nouveauMontant = parseInt(editionForm.salaire_net, 10)
-    const ancien = salaires.find((s) => s.id === id)
-    setSalaires((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? { ...s, enseignant_nom: editionForm.enseignant_nom, matiere_principale: editionForm.matiere_principale || undefined, salaire_net: nouveauMontant }
-          : s
-      )
-    )
-    if (ancien) {
-      setResume((prev) => ({ ...prev, masse: prev.masse - ancien.salaire_net + nouveauMontant }))
-    }
     setEditionId(null)
-
-    const res = await mutate({
-      endpoint: '/api/salaires',
-      method: 'PUT',
-      operation: 'UPDATE',
-      payload: {
-        id,
-        enseignant_nom: editionForm.enseignant_nom,
-        matiere_principale: editionForm.matiere_principale || undefined,
-        salaire_net: nouveauMontant,
-      },
+    const res = await salaireRepo.update(id, {
+      enseignant_nom: editionForm.enseignant_nom,
+      matiere_principale: editionForm.matiere_principale || undefined,
+      salaire_net: nouveauMontant,
     })
-    if (res?.error) {
-      setErreur("Échec de la modification.")
-    }
+    if (res?.error) setErreur('Échec de la modification.')
   }
 
   return (
@@ -199,10 +145,7 @@ export function SalairesView({
                   </>
                 ) : (
                   <>
-                    <td className="px-4 py-2 font-medium text-text">
-                      {s.enseignant_nom}
-                      {enAttenteIds.has(s.id) && <span className="badge ml-2 bg-amber-100 text-amber-700">en attente</span>}
-                    </td>
+                    <td className="px-4 py-2 font-medium text-text">{s.enseignant_nom}</td>
                     <td className="px-4 py-2 text-muted">{s.matiere_principale || '—'}</td>
                     <td className="px-4 py-2 text-muted">{s.mois}</td>
                     <td className="px-4 py-2 text-text">{formatFCFA(s.salaire_net)}</td>

@@ -1,0 +1,12 @@
+{
+  "/api/paiements/route": "app/api/paiements/route.js",
+  "/api/classes/route": "app/api/classes/route.js",
+  "/api/matieres/route": "app/api/matieres/route.js",
+  "/api/config/route": "app/api/config/route.js",
+  "/api/eleves/route": "app/api/eleves/route.js",
+  "/admin/classes/page": "app/admin/classes/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/classes/[id]/page": "app/admin/classes/[id]/page.js",
+  "/admin/eleves/page": "app/admin/eleves/page.js",
+  "/admin/configuration/page": "app/admin/configuration/page.js"
+}

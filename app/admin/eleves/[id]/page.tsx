@@ -1,40 +1,40 @@
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
 import { notFound } from 'next/navigation'
-import { db } from '@/lib/db'
+import { localDB } from '@/lib/sync/indexedDB'
 import { EleveDetail } from '@/components/eleves/EleveDetail'
 
-export const dynamic = 'force-dynamic'
+export default function EleveDetailPage({ params }: { params: { id: string } }) {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [eleve, classes, paiements, versements, absences, notes, matieres] = await Promise.all([
+      localDB.eleves.get(params.id),
+      localDB.classes.toArray(),
+      localDB.paiements.where('eleve_id').equals(params.id).toArray(),
+      localDB.versements.where('eleve_id').equals(params.id).toArray(),
+      localDB.absences.where('eleve_id').equals(params.id).toArray(),
+      localDB.notes.where('eleve_id').equals(params.id).toArray(),
+      localDB.matieres.toArray(),
+    ])
+    if (!eleve) return null
+    const classesById = new Map(classes.map((c) => [c.id, c]))
+    const matieresById = new Map(matieres.map((m) => [m.id, m]))
 
-async function getData(id: string) {
-  const [eleve, paiements, versements, absences, notes, classes] = await Promise.all([
-    db.execute({
-      sql: `SELECT e.*, c.nom as classe_nom FROM eleves e JOIN classes c ON c.id = e.classe_id WHERE e.id = ?`,
-      args: [id],
-    }),
-    db.execute({ sql: `SELECT * FROM paiements WHERE eleve_id = ? ORDER BY tranche`, args: [id] }),
-    db.execute({ sql: `SELECT * FROM versements WHERE eleve_id = ? ORDER BY date_versement DESC`, args: [id] }),
-    db.execute({ sql: `SELECT * FROM absences WHERE eleve_id = ? ORDER BY date_absence DESC`, args: [id] }),
-    db.execute({
-      sql: `SELECT n.*, m.nom as matiere_nom FROM notes n JOIN matieres m ON m.id = n.matiere_id
-            WHERE n.eleve_id = ? ORDER BY n.periode, m.nom`,
-      args: [id],
-    }),
-    db.execute(`SELECT id, nom FROM classes ORDER BY nom`),
-  ])
+    return {
+      eleve: { ...eleve, classe_nom: classesById.get(eleve.classe_id)?.nom ?? '' },
+      paiements: paiements.sort((a, b) => a.tranche - b.tranche),
+      versements: versements.sort((a, b) => (a.date_versement < b.date_versement ? 1 : -1)),
+      absences: absences.sort((a, b) => (a.date_absence < b.date_absence ? 1 : -1)),
+      notes: notes
+        .map((n) => ({ ...n, matiere_nom: matieresById.get(n.matiere_id)?.nom ?? '' }))
+        .sort((a, b) => a.periode.localeCompare(b.periode) || a.matiere_nom.localeCompare(b.matiere_nom)),
+      classes: classes.map((c) => ({ id: c.id, nom: c.nom })),
+    }
+  }, [params.id])
 
-  if (!eleve.rows[0]) return null
-  return {
-    eleve: eleve.rows[0],
-    paiements: paiements.rows,
-    versements: versements.rows,
-    absences: absences.rows,
-    notes: notes.rows,
-    classes: classes.rows as any[],
-  }
-}
-
-export default async function EleveDetailPage({ params }: { params: { id: string } }) {
-  const data = await getData(params.id)
-  if (!data) notFound()
+  if (data === null) notFound()
+  if (data === undefined) return <p className="text-sm text-muted">Chargement...</p>
 
   return <EleveDetail {...data} />
 }

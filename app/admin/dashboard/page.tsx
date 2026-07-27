@@ -1,48 +1,70 @@
+'use client'
+
 import Link from 'next/link'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Users, School, Wallet, CalendarX, Plus } from 'lucide-react'
-import { db } from '@/lib/db'
 import { formatFCFA } from '@/lib/utils/paiement'
+import { localDB } from '@/lib/sync/indexedDB'
 
-export const dynamic = 'force-dynamic'
-
-async function getStats() {
-  const [eleves, classes, absences, encaissements] = await Promise.all([
-    db.execute(`SELECT COUNT(*) as n FROM eleves WHERE actif = 1`),
-    db.execute(`SELECT COUNT(*) as n FROM classes`),
-    db.execute(`SELECT COUNT(*) as n FROM absences WHERE date_absence = date('now')`),
-    db.execute(`SELECT COALESCE(SUM(montant), 0) as total FROM versements
-                WHERE strftime('%Y-%m', date_versement) = strftime('%Y-%m', 'now')`),
-  ])
-
-  const absencesRecentes = await db.execute(`
-    SELECT a.id, a.date_absence, a.type, a.justifiee, e.nom, e.prenom, c.nom as classe_nom
-    FROM absences a
-    JOIN eleves e ON e.id = a.eleve_id
-    JOIN classes c ON c.id = e.classe_id
-    WHERE a.date_absence >= date('now', '-7 days')
-    ORDER BY a.date_absence DESC LIMIT 8
-  `)
-
-  const echeancesProches = await db.execute(`
-    SELECT p.id, p.date_echeance, p.montant_du, p.montant_paye, e.nom, e.prenom
-    FROM paiements p
-    JOIN eleves e ON e.id = p.eleve_id
-    WHERE p.statut != 'soldee' AND p.date_echeance <= date('now', '+14 days')
-    ORDER BY p.date_echeance ASC LIMIT 8
-  `)
-
-  return {
-    totalEleves: Number(eleves.rows[0]?.n ?? 0),
-    totalClasses: Number(classes.rows[0]?.n ?? 0),
-    absencesAujourdhui: Number(absences.rows[0]?.n ?? 0),
-    encaissementsMois: Number(encaissements.rows[0]?.total ?? 0),
-    absencesRecentes: absencesRecentes.rows,
-    echeancesProches: echeancesProches.rows,
-  }
+function auj() {
+  return new Date().toISOString().slice(0, 10)
 }
 
-export default async function DashboardPage() {
-  const stats = await getStats()
+export default function DashboardPage() {
+  const stats = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [eleves, classes, absences, versements, paiements] = await Promise.all([
+      localDB.eleves.where('actif').equals(1).toArray(),
+      localDB.classes.toArray(),
+      localDB.absences.toArray(),
+      localDB.versements.toArray(),
+      localDB.paiements.toArray(),
+    ])
+    const classesById = new Map(classes.map((c) => [c.id, c]))
+    const elevesById = new Map(eleves.map((e) => [e.id, e]))
+
+    const today = auj()
+    const moisCourant = today.slice(0, 7)
+    const dans7jMin = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+    const dans14jMax = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+
+    const absencesAujourdhui = absences.filter((a) => a.date_absence === today).length
+    const encaissementsMois = versements
+      .filter((v) => v.date_versement.slice(0, 7) === moisCourant)
+      .reduce((a, v) => a + v.montant, 0)
+
+    const absencesRecentes = absences
+      .filter((a) => a.date_absence >= dans7jMin)
+      .sort((a, b) => (a.date_absence < b.date_absence ? 1 : -1))
+      .slice(0, 8)
+      .map((a) => {
+        const e = elevesById.get(a.eleve_id)
+        const c = e ? classesById.get(e.classe_id) : undefined
+        return { ...a, nom: e?.nom, prenom: e?.prenom, classe_nom: c?.nom }
+      })
+
+    const echeancesProches = paiements
+      .filter((p) => p.statut !== 'soldee' && p.date_echeance <= dans14jMax)
+      .sort((a, b) => (a.date_echeance > b.date_echeance ? 1 : -1))
+      .slice(0, 8)
+      .map((p) => {
+        const e = elevesById.get(p.eleve_id)
+        return { ...p, nom: e?.nom, prenom: e?.prenom }
+      })
+
+    return {
+      totalEleves: eleves.length,
+      totalClasses: classes.length,
+      absencesAujourdhui,
+      encaissementsMois,
+      absencesRecentes,
+      echeancesProches,
+    }
+  }, [])
+
+  if (!stats) {
+    return <p className="text-sm text-muted">Chargement...</p>
+  }
 
   const cards = [
     { label: 'Total élèves', value: stats.totalEleves, icon: Users, color: 'text-primary bg-blue-50' },

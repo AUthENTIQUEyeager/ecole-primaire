@@ -1,20 +1,32 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { DepensesView } from '@/components/depenses/DepensesView'
 
-export const dynamic = 'force-dynamic'
+export default function DepensesPage() {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const depenses = await localDB.depenses.toArray()
+    depenses.sort((a, b) => (a.date_depense < b.date_depense ? 1 : -1))
 
-export default async function DepensesPage() {
-  const [depenses, totalMois] = await Promise.all([
-    db.execute(`SELECT * FROM depenses ORDER BY date_depense DESC`),
-    db.execute(`SELECT categorie, COALESCE(SUM(montant),0) as total FROM depenses
-                WHERE strftime('%Y-%m', date_depense) = strftime('%Y-%m','now')
-                GROUP BY categorie`),
-  ])
+    const moisCourant = new Date().toISOString().slice(0, 7)
+    const parCategorie = new Map<string, number>()
+    for (const d of depenses) {
+      if (d.date_depense.slice(0, 7) !== moisCourant) continue
+      parCategorie.set(d.categorie, (parCategorie.get(d.categorie) ?? 0) + d.montant)
+    }
+    const totalParCategorie = [...parCategorie.entries()].map(([categorie, total]) => ({ categorie, total }))
+
+    return { depenses, totalParCategorie }
+  }, [])
+
+  if (!data) return <p className="text-sm text-muted">Chargement...</p>
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Dépenses</h1>
-      <DepensesView depenses={depenses.rows as any[]} totalParCategorie={totalMois.rows as any[]} />
+      <DepensesView depenses={data.depenses as any[]} totalParCategorie={data.totalParCategorie as any[]} />
     </div>
   )
 }

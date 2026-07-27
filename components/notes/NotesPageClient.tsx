@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { NoteGrid } from './NoteGrid'
 
 interface Classe { id: string; nom: string }
@@ -9,16 +11,14 @@ interface Matiere { id: string; nom: string; coefficient: number }
 export function NotesPageClient({ classes, matieres }: { classes: Classe[]; matieres: Matiere[] }) {
   const [classeId, setClasseId] = useState(classes[0]?.id ?? '')
   const [periode, setPeriode] = useState<'T1' | 'T2' | 'T3'>('T1')
-  const [eleves, setEleves] = useState<{ id: string; nom: string; prenom: string }[]>([])
-  const [chargement, setChargement] = useState(false)
 
-  useEffect(() => {
-    if (!classeId) return
-    setChargement(true)
-    fetch(`/api/classes/${classeId}`)
-      .then((r) => r.json())
-      .then((data) => setEleves(data.eleves ?? []))
-      .finally(() => setChargement(false))
+  // Lecture locale (Dexie) — plus de fetch réseau au changement de classe.
+  const eleves = useLiveQuery(async () => {
+    if (!localDB || !classeId) return []
+    const liste = await localDB.eleves.where('classe_id').equals(classeId).and((e) => e.actif === 1).toArray()
+    return liste
+      .map((e) => ({ id: e.id, nom: e.nom, prenom: e.prenom }))
+      .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
   }, [classeId])
 
   return (
@@ -36,7 +36,7 @@ export function NotesPageClient({ classes, matieres }: { classes: Classe[]; mati
         </select>
       </div>
 
-      {chargement ? (
+      {!eleves ? (
         <p className="text-sm text-muted">Chargement...</p>
       ) : (
         <NoteGrid eleves={eleves} matieres={matieres} periode={periode} />

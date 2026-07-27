@@ -1,22 +1,27 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { NotesPageClient } from '@/components/notes/NotesPageClient'
 
-export const dynamic = 'force-dynamic'
+export default function NotesPage() {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [classes, matieres] = await Promise.all([localDB.classes.toArray(), localDB.matieres.toArray()])
+    return {
+      classes: classes.map((c) => ({ id: c.id, nom: c.nom })).sort((a, b) => a.nom.localeCompare(b.nom)),
+      matieres: matieres
+        .map((m) => ({ id: m.id, nom: m.nom, coefficient: m.coefficient }))
+        .sort((a, b) => a.nom.localeCompare(b.nom)),
+    }
+  }, [])
 
-async function getData() {
-  const [classes, matieres] = await Promise.all([
-    db.execute(`SELECT id, nom FROM classes ORDER BY nom`),
-    db.execute(`SELECT id, nom, coefficient FROM matieres ORDER BY nom`),
-  ])
-  return { classes: classes.rows as any[], matieres: matieres.rows as any[] }
-}
+  if (!data) return <p className="text-sm text-muted">Chargement...</p>
 
-export default async function NotesPage() {
-  const { classes, matieres } = await getData()
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Notes & Bulletins</h1>
-      <NotesPageClient classes={classes} matieres={matieres} />
+      <NotesPageClient classes={data.classes} matieres={data.matieres} />
     </div>
   )
 }

@@ -1,29 +1,29 @@
-import { db } from '@/lib/db'
-import { AttendanceGrid } from '@/components/absences/AttendanceGrid'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
 import { notFound } from 'next/navigation'
+import { localDB } from '@/lib/sync/indexedDB'
+import { AttendanceGrid } from '@/components/absences/AttendanceGrid'
 
-export const dynamic = 'force-dynamic'
+export default function ClasseDetailPage({ params }: { params: { id: string } }) {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [classe, eleves] = await Promise.all([
+      localDB.classes.get(params.id),
+      localDB.eleves.where('classe_id').equals(params.id).and((e) => e.actif === 1).toArray(),
+    ])
+    if (!classe) return null
+    eleves.sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
+    return { classe, eleves }
+  }, [params.id])
 
-async function getClasse(id: string) {
-  const [classe, eleves] = await Promise.all([
-    db.execute({ sql: `SELECT * FROM classes WHERE id = ?`, args: [id] }),
-    db.execute({
-      sql: `SELECT id, nom, prenom, matricule FROM eleves WHERE classe_id = ? AND actif = 1 ORDER BY nom, prenom`,
-      args: [id],
-    }),
-  ])
-  if (!classe.rows[0]) return null
-  return { classe: classe.rows[0], eleves: eleves.rows as any[] }
-}
-
-export default async function ClasseDetailPage({ params }: { params: { id: string } }) {
-  const data = await getClasse(params.id)
-  if (!data) notFound()
+  if (data === null) notFound()
+  if (data === undefined) return <p className="text-sm text-muted">Chargement...</p>
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-text">Classe {data.classe.nom as string}</h1>
+        <h1 className="text-xl font-semibold text-text">Classe {data.classe.nom}</h1>
         <p className="text-sm text-muted">Appel du jour — cochez les absences et retards</p>
       </div>
       <AttendanceGrid classeId={params.id} eleves={data.eleves as any} />

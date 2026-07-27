@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Save, Loader2, School } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
+import { configRepo } from '@/lib/localdb/repo'
 import { redimensionnerImage } from '@/lib/utils/image'
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024 // limite sur le fichier SOURCE ; il est ensuite compressé
@@ -48,18 +48,13 @@ export function ConfigurationView({ config }: { config: Record<string, string> }
   async function enregistrer() {
     setEnregistrement(true)
     setMessage(null)
-    const res = await mutate({
-      endpoint: '/api/config',
-      method: 'PUT',
-      operation: 'UPDATE',
-      payload: {
-        ...form,
-        frais_annuels: Number(form.frais_annuels),
-        tranche1_montant: Number(form.tranche1_montant),
-        tranche2_montant: Number(form.tranche2_montant),
-        tranche3_montant: Number(form.tranche3_montant),
-        logo_url: logoUrl,
-      },
+    const res = await configRepo.save({
+      ...form,
+      frais_annuels: Number(form.frais_annuels),
+      tranche1_montant: Number(form.tranche1_montant),
+      tranche2_montant: Number(form.tranche2_montant),
+      tranche3_montant: Number(form.tranche3_montant),
+      logo_url: logoUrl,
     })
     setEnregistrement(false)
 

@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { Check, X, Loader2, Printer } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
+import { absenceRepo } from '@/lib/localdb/repo'
+import { localDB } from '@/lib/sync/indexedDB'
 
 interface EleveLeger {
   id: string
@@ -20,37 +22,37 @@ type Etat = 'present' | 'absence' | 'retard'
 
 export function AttendanceGrid({ classeId, eleves }: AttendanceGridProps) {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [etats, setEtats] = useState<Record<string, Etat>>({})
   const [enregistrement, setEnregistrement] = useState<string | null>(null)
 
-  const nbAbsents = useMemo(
-    () => Object.values(etats).filter((e) => e === 'absence').length,
-    [etats]
-  )
-  const nbRetards = useMemo(
-    () => Object.values(etats).filter((e) => e === 'retard').length,
-    [etats]
-  )
+  // Les absences/retards déjà enregistrés pour CE jour, pour cette classe —
+  // permet de rouvrir l'appel du jour sans perdre ce qui a déjà été coché
+  // (y compris juste après un redémarrage de l'app, hors ligne).
+  const etatsExistants = useLiveQuery(async () => {
+    if (!localDB) return {}
+    const ids = new Set(eleves.map((e) => e.id))
+    const absences = await localDB.absences.where('date_absence').equals(date).toArray()
+    const etats: Record<string, Etat> = {}
+    for (const a of absences) {
+      if (ids.has(a.eleve_id)) etats[a.eleve_id] = a.type
+    }
+    return etats
+  }, [date, eleves])
+
+  const [etatsLocaux, setEtatsLocaux] = useState<Record<string, Etat>>({})
+  const etats = { ...(etatsExistants ?? {}), ...etatsLocaux }
+
+  const nbAbsents = useMemo(() => Object.values(etats).filter((e) => e === 'absence').length, [etats])
+  const nbRetards = useMemo(() => Object.values(etats).filter((e) => e === 'retard').length, [etats])
 
   async function marquer(eleveId: string, etat: Etat) {
     const precedent = etats[eleveId]
     const nouveau = precedent === etat ? 'present' : etat
-    setEtats((prev) => ({ ...prev, [eleveId]: nouveau }))
+    setEtatsLocaux((prev) => ({ ...prev, [eleveId]: nouveau }))
 
     if (nouveau === 'present') return // rien à enregistrer pour un élève présent
 
     setEnregistrement(eleveId)
-    await mutate({
-      endpoint: '/api/absences',
-      method: 'POST',
-      operation: 'INSERT',
-      payload: {
-        eleve_id: eleveId,
-        date_absence: date,
-        type: nouveau,
-        justifiee: false,
-      },
-    })
+    await absenceRepo.create({ eleve_id: eleveId, date_absence: date, type: nouveau, justifiee: false })
     setEnregistrement(null)
   }
 
@@ -62,7 +64,7 @@ export function AttendanceGrid({ classeId, eleves }: AttendanceGridProps) {
           <input
             type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={(e) => { setDate(e.target.value); setEtatsLocaux({}) }}
             className="input-field w-auto"
           />
         </div>
@@ -97,7 +99,7 @@ export function AttendanceGrid({ classeId, eleves }: AttendanceGridProps) {
                   <td className="px-4 py-2 text-muted">{e.matricule}</td>
                   <td className="px-4 py-2 text-center">
                     <button
-                      onClick={() => setEtats((prev) => ({ ...prev, [e.id]: 'present' }))}
+                      onClick={() => setEtatsLocaux((prev) => ({ ...prev, [e.id]: 'present' }))}
                       className={`inline-flex h-7 w-7 items-center justify-center rounded-full border ${
                         etat === 'present' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border text-muted'
                       }`}

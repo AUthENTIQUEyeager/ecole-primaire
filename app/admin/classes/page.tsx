@@ -1,20 +1,21 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { ClassesGrid } from '@/components/classes/ClassesGrid'
 
-export const dynamic = 'force-dynamic'
+const ORDRE = ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2']
 
-async function getClasses() {
-  const result = await db.execute(`
-    SELECT c.*, (SELECT COUNT(*) FROM eleves e WHERE e.classe_id = c.id AND e.actif = 1) as effectif
-    FROM classes c
-    ORDER BY CASE c.nom WHEN 'CP1' THEN 1 WHEN 'CP2' THEN 2 WHEN 'CE1' THEN 3
-      WHEN 'CE2' THEN 4 WHEN 'CM1' THEN 5 WHEN 'CM2' THEN 6 END
-  `)
-  return result.rows
-}
+export default function ClassesPage() {
+  const classes = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [classes, eleves] = await Promise.all([localDB.classes.toArray(), localDB.eleves.where('actif').equals(1).toArray()])
+    return classes
+      .map((c) => ({ ...c, effectif: eleves.filter((e) => e.classe_id === c.id).length }))
+      .sort((a, b) => ORDRE.indexOf(a.nom) - ORDRE.indexOf(b.nom))
+  }, [])
 
-export default async function ClassesPage() {
-  const classes = await getClasses()
+  if (!classes) return <p className="text-sm text-muted">Chargement...</p>
 
   return (
     <div className="space-y-6">

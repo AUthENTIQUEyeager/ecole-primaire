@@ -70,7 +70,11 @@ export async function POST(req: NextRequest) {
   const config = Object.fromEntries(configRes.rows.map((r) => [r.key, r.value as string]))
   const anneeScolaire = config.annee_scolaire ?? new Date().getFullYear().toString()
 
-  const id = randomUUID()
+  // Accepte l'id généré côté client (écriture optimiste hors ligne) pour que
+  // l'enregistrement local et l'enregistrement serveur soient IDENTIQUES dès
+  // la création — sinon la fiche créée hors ligne "disparaît" au profit d'un
+  // doublon serveur lors de la resynchronisation.
+  const id = typeof body.id === 'string' && body.id ? body.id : randomUUID()
   const matricule = await genererMatricule(anneeScolaire)
 
   await db.execute({

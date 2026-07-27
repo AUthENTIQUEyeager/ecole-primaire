@@ -63,58 +63,71 @@ génération matricule/reçu, journal d'activité).
 Aucune migration de base de données n'est nécessaire pour ces ajouts — les nouveaux champs
 (logo, photo) utilisent des colonnes/texte déjà prévus dans le schéma initial.
 
-## Correctifs offline-first (après retour utilisateur)
+## Architecture locale-first (refonte connectivité)
 
-- **Crash `crypto.randomUUID is not a function` en mode hors ligne** — corrigé :
-  `lib/sync/syncManager.ts` utilisait l'import Node.js `crypto`, qui ne fonctionne
-  pas dans le navigateur. Remplacé par l'API Web Crypto native (`crypto.randomUUID()`).
-- **Actions non reflétées sans connexion** — la plupart des écrans dépendaient d'un
-  `router.refresh()` ou `window.location.reload()` après chaque action, ce qui
-  nécessite le réseau et ne fonctionne pas hors ligne. Tous les écrans suivants
-  tiennent maintenant leur propre état local et l'appliquent en optimiste, avant
-  même la réponse du serveur : Élèves (ajout/édition), Paiements (versement,
-  recalcul réel des tranches via `repartirVersement`), Matières, Annonces,
-  Dépenses (avec totaux du mois), Salaires, Classes (enseignant principal), Notes.
-- **`mutate()` distingue maintenant clairement** : une vraie coupure réseau (mise
-  en file d'attente IndexedDB, synchronisée au retour de connexion) d'un refus du
-  serveur (erreur affichée immédiatement, jamais mise en file silencieusement).
-- **Nouvelle route `/api/paiements`** + mise à jour de `useOfflineData` : toutes
-  les tranches de paiement de tous les élèves sont mises en cache local au
-  chargement, pour pouvoir enregistrer un versement hors ligne même pour un
-  élève dont la fiche n'a jamais été ouverte.
-- Chaque élément ajouté/modifié hors connexion affiche un badge **"en attente"**
-  jusqu'à sa synchronisation.
+L'app a été repensée pour fonctionner comme une application locale : **IndexedDB
+(Dexie) est la source de vérité pour l'interface admin**, Turso ne sert plus
+qu'à la synchronisation en arrière-plan. Avant cette refonte, chaque page admin
+était un Server Component qui interrogeait Turso à chaque navigation — sur une
+connexion faible ou absente (le cas de la majorité des écoles), cela rendait
+l'app lente et parfois inutilisable hors ligne.
 
-### Limite connue
+**Ce qui a changé :**
 
-Les pages listées (dashboard, élèves, classes, etc.) sont des Server Components
-qui lisent Turso directement — elles ne se re-rendent donc pas depuis le cache
-local hors ligne au chargement initial d'une page (il faut avoir déjà chargé la
-page en ligne au moins une fois dans la session). Une fois la page chargée,
-en revanche, toutes les actions qu'on y fait restent utilisables et visibles
-sans connexion grâce aux correctifs ci-dessus.
+- **13 tables IndexedDB** (`lib/sync/indexedDB.ts`) reflètent tout le schéma
+  Turso (avant : 5 tables seulement — absences, notes, versements, dépenses,
+  salaires et annonces n'étaient pas mises en cache).
+- **Toutes les pages `app/admin/**`** sont désormais des Client Components qui
+  lisent Dexie via `useLiveQuery` (`dexie-react-hooks`) — plus aucune requête
+  réseau au chargement d'une page ou à un clic. Le `npm run build` les marque
+  toutes en statique (`○`), preuve qu'elles ne dépendent plus d'une connexion
+  DB au rendu.
+- **`lib/localdb/repo.ts`** centralise chaque écriture métier (élève, absence,
+  versement, dépense, salaire, annonce, matière, configuration) : elle écrit
+  d'abord dans Dexie (instantané, visible partout dans l'app immédiatement),
+  puis pousse vers le serveur via `mutate()` (file d'attente si hors ligne).
+- **`/api/sync/pull`** renvoie toutes les tables en un seul aller-retour réseau
+  (plutôt que 10 requêtes séparées) ; **`hooks/useAutoSync.ts`** orchestre la
+  reconnexion : vide d'abord la file d'attente (envoie ce qui est en attente),
+  *puis* retélécharge les données fraîches (dans cet ordre, pour éviter de
+  retélécharger avant que ses propres écritures soient arrivées).
+- **IDs générés côté client** : les routes API (`eleves`, `matieres`,
+  `depenses`, `salaires`, `annonces`, `absences`, `notes`, `versements`)
+  acceptent désormais l'id généré localement, pour que l'enregistrement local
+  et l'enregistrement serveur soient identiques dès la création — plus de
+  doublon après resynchronisation.
+- **Choix volontaire** : synchronisation complète (« full pull ») plutôt
+  qu'incrémentale par horodatage — plus simple et plus robuste sur une
+  connexion qui coupe en cours de route (pas d'état "à moitié synchronisé"),
+  et largement suffisant pour le volume de données d'une école primaire.
+
+Résultat : l'app s'ouvre et répond instantanément (lecture ET écriture),
+connexion ou non — seul le tout premier chargement (avant d'avoir jamais été
+en ligne) nécessite le réseau, pour peupler IndexedDB une première fois.
+
+### Correctif : lien Vercel → localhost
+
+`NEXTAUTH_URL` était figé sur `http://localhost:3000` dans les variables
+d'environnement. Remplacé par `trustHost: true` (`lib/auth.config.ts`), qui
+déduit l'URL depuis la requête — plus besoin de définir `NEXTAUTH_URL` sur
+Vercel (et il ne faut surtout pas le faire, sous peine de reproduire le bug).
 
 ## Ce qui reste à faire avant la mise en production
 
 - **Connecter de vrais identifiants Turso/Upstash** — le code compile et
   `npm run build` passe intégralement (vérifié dans cet environnement avec
-  des identifiants factices ; toutes les pages qui lisent la base sont
-  marquées `force-dynamic` pour ne pas exiger de connexion DB au moment du
-  build). Il faut créer un projet Turso et un projet Upstash réels, puis
-  lancer `db:migrate` et `db:seed`.
-- **Rang réel dans le bulletin** : le calcul `calculerRangs()` existe dans
-  `lib/utils/notes.ts` mais n'est pas encore branché dans `DocumentsView`
-  (actuellement rang = 1/1 en placeholder) — il faut charger les moyennes
-  de toute la classe pour calculer le rang réel.
+  des identifiants factices). Il faut créer un projet Turso et un projet
+  Upstash réels, puis lancer `db:migrate` et `db:seed`.
 - **CSV import** des élèves (mentionné dans le cahier des charges) — non
   implémenté.
 - **Icônes PWA** : des icônes de remplacement simples sont fournies dans
   `public/icons/` — à remplacer par le vrai logo de l'école.
-- **Photo élève** : le champ `photo_url` existe en base mais il n'y a pas
-  encore d'upload d'image dans le formulaire.
-- Un test complet du flux offline→online (couper le réseau, enregistrer une
-  absence, revenir en ligne, vérifier la synchronisation) doit être fait
-  manuellement dans un vrai navigateur — non testable dans ce sandbox.
+- **Photo élève** : le champ `photo_url` existe en base et le formulaire
+  d'upload est branché (`redimensionnerImage`), à valider avec de vraies photos.
+- Un test complet du flux offline→online (couper le réseau, faire l'appel
+  d'une classe et enregistrer un versement, revenir en ligne, vérifier la
+  synchronisation) doit être fait manuellement dans un vrai navigateur — non
+  testable dans ce sandbox.
 
 ## Structure
 

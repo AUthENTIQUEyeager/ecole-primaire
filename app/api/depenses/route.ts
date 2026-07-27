@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const parsed = depenseSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   const data = parsed.data
-  const id = randomUUID()
+  const id = typeof body.id === 'string' && body.id ? body.id : randomUUID()
 
   await db.execute({
     sql: `INSERT INTO depenses (id, categorie, description, montant, date_depense, created_by_nom)

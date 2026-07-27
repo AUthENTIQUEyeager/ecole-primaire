@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { X, Loader2 } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
-import { formatFCFA, repartirVersement, computeStatut, type StatutPaiement } from '@/lib/utils/paiement'
+import { versementRepo } from '@/lib/localdb/repo'
+import { formatFCFA, type StatutPaiement } from '@/lib/utils/paiement'
 
 export interface TrancheInfo {
   id: string
@@ -19,12 +19,10 @@ interface VersementModalProps {
   eleveNom: string
   tranches: TrancheInfo[]
   onClose: () => void
-  /**
-   * Appelé avec les tranches déjà recalculées localement (optimiste) —
-   * s'applique immédiatement, connexion ou non. `queued` indique si
-   * l'enregistrement est en attente de synchronisation.
-   */
-  onSuccess: (info: { nouvellesTranches: TrancheInfo[]; queued: boolean; numeroRecu?: string }) => void
+  // La répartition/débordement sur les tranches est calculée et écrite dans
+  // Dexie par versementRepo — la fiche élève se met à jour toute seule via
+  // sa requête réactive. onSuccess ne sert qu'à fermer la fenêtre.
+  onSuccess: () => void
 }
 
 export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess }: VersementModalProps) {
@@ -56,34 +54,13 @@ export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess
     }
 
     setChargement(true)
-
-    // Calcul optimiste : on applique tout de suite la même logique de
-    // répartition/débordement que le serveur, pour que le "reste à payer"
-    // se mette à jour instantanément, connexion ou non.
-    const repartitions = repartirVersement(tranchesImpayees, montantNum, trancheChoisie)
-    const today = new Date()
-    const nouvellesTranches: TrancheInfo[] = tranches.map((t) => {
-      const r = repartitions.find((rep) => rep.trancheId === t.id)
-      if (!r) return t
-      return {
-        ...t,
-        montant_paye: r.nouveauMontantPaye,
-        statut: computeStatut(r.nouveauMontantPaye, t.montant_du, t.date_echeance, today),
-      }
-    })
-
-    const res = await mutate({
-      endpoint: '/api/versements',
-      method: 'POST',
-      operation: 'INSERT',
-      payload: {
-        eleve_id: eleveId,
-        montant: montantNum,
-        date_versement: today.toISOString().slice(0, 10),
-        mode_paiement: mode,
-        caissier_nom: caissier,
-        tranche_depart: trancheChoisie,
-      },
+    const res = await versementRepo.create({
+      eleve_id: eleveId,
+      montant: montantNum,
+      date_versement: new Date().toISOString().slice(0, 10),
+      mode_paiement: mode,
+      caissier_nom: caissier,
+      tranche_depart: trancheChoisie,
     })
     setChargement(false)
 
@@ -91,11 +68,7 @@ export function VersementModal({ eleveId, eleveNom, tranches, onClose, onSuccess
       setErreur("Erreur lors de l'enregistrement. Réessayez.")
       return
     }
-    onSuccess({
-      nouvellesTranches,
-      queued: !!res?.queued,
-      numeroRecu: res?.numero_recu,
-    })
+    onSuccess()
   }
 
   if (tranchesImpayees.length === 0) {

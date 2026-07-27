@@ -1,36 +1,47 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { PaiementsView } from '@/components/paiements/PaiementsView'
 
-export const dynamic = 'force-dynamic'
+const ORDRE_STATUT = ['en_retard_total', 'en_retard_partiel', 'en_cours', 'en_attente']
 
-async function getElevesAvecPaiements() {
-  const result = await db.execute(`
-    SELECT e.id, e.nom, e.prenom, e.whatsapp_parent, e.nom_parent, c.nom as classe_nom,
-      COALESCE(SUM(p.montant_du), 0) as montant_du_total,
-      COALESCE(SUM(p.montant_paye), 0) as montant_paye_total,
-      (SELECT statut FROM paiements p2 WHERE p2.eleve_id = e.id AND p2.statut != 'soldee'
-        ORDER BY CASE statut WHEN 'en_retard_total' THEN 1 WHEN 'en_retard_partiel' THEN 2
-        WHEN 'en_cours' THEN 3 WHEN 'en_attente' THEN 4 END LIMIT 1) as statut_paiement
-    FROM eleves e
-    JOIN classes c ON c.id = e.classe_id
-    LEFT JOIN paiements p ON p.eleve_id = e.id
-    WHERE e.actif = 1
-    GROUP BY e.id
-    ORDER BY e.nom, e.prenom
-  `)
-  return result.rows.map((r) => ({
-    ...r,
-    statut_paiement: r.statut_paiement ?? 'soldee',
-  })) as any[]
-}
+export default function PaiementsPage() {
+  const eleves = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [eleves, classes, paiements] = await Promise.all([
+      localDB.eleves.where('actif').equals(1).toArray(),
+      localDB.classes.toArray(),
+      localDB.paiements.toArray(),
+    ])
+    const classesById = new Map(classes.map((c) => [c.id, c]))
 
-export default async function PaiementsPage() {
-  const eleves = await getElevesAvecPaiements()
+    return eleves
+      .map((e) => {
+        const tranches = paiements.filter((p) => p.eleve_id === e.id)
+        const nonSoldees = tranches.filter((p) => p.statut !== 'soldee')
+        nonSoldees.sort((a, b) => ORDRE_STATUT.indexOf(a.statut) - ORDRE_STATUT.indexOf(b.statut))
+        return {
+          id: e.id,
+          nom: e.nom,
+          prenom: e.prenom,
+          whatsapp_parent: e.whatsapp_parent,
+          nom_parent: e.nom_parent,
+          classe_nom: classesById.get(e.classe_id)?.nom ?? '',
+          montant_du_total: tranches.reduce((a, p) => a + p.montant_du, 0),
+          montant_paye_total: tranches.reduce((a, p) => a + p.montant_paye, 0),
+          statut_paiement: nonSoldees[0]?.statut ?? 'soldee',
+        }
+      })
+      .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
+  }, [])
+
+  if (!eleves) return <p className="text-sm text-muted">Chargement...</p>
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Paiements</h1>
-      <PaiementsView eleves={eleves} />
+      <PaiementsView eleves={eleves as any} />
     </div>
   )
 }

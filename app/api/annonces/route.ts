@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const parsed = annonceSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   const data = parsed.data
-  const id = randomUUID()
+  const id = typeof body.id === 'string' && body.id ? body.id : randomUUID()
 
   await db.execute({
     sql: `INSERT INTO annonces (id, titre, contenu, auteur_nom, priorite, date_debut, date_fin)

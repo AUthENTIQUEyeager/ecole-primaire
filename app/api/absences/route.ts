@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   }
   const data = parsed.data
-  const id = randomUUID()
+  const id = typeof body.id === 'string' && body.id ? body.id : randomUUID()
 
   await db.execute({
     sql: `INSERT INTO absences (id, eleve_id, date_absence, type, justifiee, motif, created_by)

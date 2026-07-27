@@ -9,6 +9,11 @@ import type { NextAuthConfig } from 'next-auth'
  * (voir lib/auth.ts) qui étend celle-ci avec les providers.
  */
 export const authConfig = {
+  // Déduit l'URL depuis les en-têtes de la requête (host/proto) plutôt que de
+  // dépendre de NEXTAUTH_URL/AUTH_URL — évite le bug où une valeur oubliée à
+  // "http://localhost:3000" dans les variables d'environnement Vercel fait
+  // rediriger la prod vers localhost après connexion.
+  trustHost: true,
   session: { strategy: 'jwt' },
   pages: { signIn: '/login' },
   callbacks: {

@@ -1,38 +1,46 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { EleveTable } from '@/components/eleves/EleveTable'
 
-export const dynamic = 'force-dynamic'
+export default function ElevesPage() {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [eleves, classes, paiements] = await Promise.all([
+      localDB.eleves.where('actif').equals(1).toArray(),
+      localDB.classes.toArray(),
+      localDB.paiements.toArray(),
+    ])
+    const classesById = new Map(classes.map((c) => [c.id, c]))
+    const ordreStatut = ['en_retard_total', 'en_retard_partiel', 'en_cours', 'en_attente']
 
-async function getData() {
-  const [eleves, classes] = await Promise.all([
-    db.execute(`
-      SELECT e.id, e.nom, e.prenom, e.sexe, e.whatsapp_parent, e.statut_medical, c.nom as classe_nom,
-        (SELECT statut FROM paiements p WHERE p.eleve_id = e.id AND p.statut != 'soldee'
-          ORDER BY CASE statut WHEN 'en_retard_total' THEN 1 WHEN 'en_retard_partiel' THEN 2
-          WHEN 'en_cours' THEN 3 WHEN 'en_attente' THEN 4 END LIMIT 1) as statut_paiement,
-        (SELECT COALESCE(SUM(montant_du),0) FROM paiements p WHERE p.eleve_id = e.id) as montant_du_total,
-        (SELECT COALESCE(SUM(montant_paye),0) FROM paiements p WHERE p.eleve_id = e.id) as montant_paye_total
-      FROM eleves e
-      JOIN classes c ON c.id = e.classe_id
-      WHERE e.actif = 1
-      ORDER BY e.nom, e.prenom
-    `),
-    db.execute(`SELECT id, nom FROM classes ORDER BY nom`),
-  ])
+    const elevesEnrichis = eleves
+      .map((e) => {
+        const tranches = paiements.filter((p) => p.eleve_id === e.id)
+        const montant_du_total = tranches.reduce((a, p) => a + p.montant_du, 0)
+        const montant_paye_total = tranches.reduce((a, p) => a + p.montant_paye, 0)
+        const nonSoldees = tranches.filter((p) => p.statut !== 'soldee')
+        nonSoldees.sort((a, b) => ordreStatut.indexOf(a.statut) - ordreStatut.indexOf(b.statut))
+        return {
+          ...e,
+          classe_nom: classesById.get(e.classe_id)?.nom ?? '',
+          statut_paiement: nonSoldees[0]?.statut ?? 'soldee',
+          montant_du_total,
+          montant_paye_total,
+        }
+      })
+      .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
 
-  return {
-    eleves: eleves.rows.map((r) => ({ ...r, statut_paiement: r.statut_paiement ?? 'soldee' })) as any[],
-    classes: classes.rows as any[],
-  }
-}
+    return { eleves: elevesEnrichis, classes: classes.map((c) => ({ id: c.id, nom: c.nom })) }
+  }, [])
 
-export default async function ElevesPage() {
-  const { eleves, classes } = await getData()
+  if (!data) return <p className="text-sm text-muted">Chargement...</p>
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Élèves</h1>
-      <EleveTable eleves={eleves} classes={classes} />
+      <EleveTable eleves={data.eleves as any} classes={data.classes} />
     </div>
   )
 }

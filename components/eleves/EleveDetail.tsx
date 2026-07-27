@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Wallet, CalendarX, BookOpen, Printer, Pencil } from 'lucide-react'
+import { User, Wallet, Printer, Pencil } from 'lucide-react'
 import { LABELS_STATUT, COULEURS_STATUT, formatFCFA, type StatutPaiement } from '@/lib/utils/paiement'
-import { VersementModal, type TrancheInfo } from '@/components/paiements/VersementModal'
+import { VersementModal } from '@/components/paiements/VersementModal'
 import { EleveForm } from './EleveForm'
 
 interface EleveDetailProps {
@@ -18,19 +18,15 @@ interface EleveDetailProps {
 const TABS = ['profil', 'notes', 'absences', 'paiements'] as const
 type Tab = (typeof TABS)[number]
 
-export function EleveDetail({ eleve: eleveInitial, paiements: paiementsInitiaux, versements: versementsInitiaux, absences, notes, classes }: EleveDetailProps) {
-  const [eleve, setEleve] = useState(eleveInitial)
-  const [paiements, setPaiements] = useState<TrancheInfo[]>(paiementsInitiaux)
-  const [versements, setVersements] = useState(versementsInitiaux)
-  const [versementEnAttente, setVersementEnAttente] = useState(false)
+// Toutes les données (eleve, paiements, versements...) viennent d'une requête
+// Dexie réactive dans la page parente : un versement ou une modification se
+// reflète ici automatiquement, sans état local dupliqué ni callback manuel.
+export function EleveDetail({ eleve, paiements, versements, absences, notes, classes }: EleveDetailProps) {
   const [tab, setTab] = useState<Tab>('profil')
   const [modalOuvert, setModalOuvert] = useState(false)
   const [formOuvert, setFormOuvert] = useState(false)
 
-  const totalDu = paiements.reduce((a, p) => a + p.montant_du, 0)
-  const totalPaye = paiements.reduce((a, p) => a + p.montant_paye, 0)
-  const statutGlobal: StatutPaiement =
-    paiements.find((p) => p.statut !== 'soldee')?.statut ?? 'soldee'
+  const statutGlobal: StatutPaiement = paiements.find((p) => p.statut !== 'soldee')?.statut ?? 'soldee'
 
   return (
     <div className="space-y-6">
@@ -173,12 +169,7 @@ export function EleveDetail({ eleve: eleveInitial, paiements: paiementsInitiaux,
             })}
           </div>
 
-          <div className="flex items-center justify-between">
-            {versementEnAttente ? (
-              <span className="badge bg-amber-100 text-amber-700">
-                Dernier versement en attente de synchronisation
-              </span>
-            ) : <span />}
+          <div className="flex items-center justify-end">
             <button className="btn-primary" onClick={() => setModalOuvert(true)}>
               <Wallet size={16} /> Enregistrer un versement
             </button>
@@ -219,10 +210,7 @@ export function EleveDetail({ eleve: eleveInitial, paiements: paiementsInitiaux,
           classes={classes}
           eleve={eleve}
           onClose={() => setFormOuvert(false)}
-          onSuccess={(champsModifies) => {
-            setEleve((prev: any) => ({ ...prev, ...champsModifies }))
-            setFormOuvert(false)
-          }}
+          onSuccess={() => setFormOuvert(false)}
         />
       )}
 
@@ -232,22 +220,7 @@ export function EleveDetail({ eleve: eleveInitial, paiements: paiementsInitiaux,
           eleveNom={`${eleve.prenom} ${eleve.nom}`}
           tranches={paiements}
           onClose={() => setModalOuvert(false)}
-          onSuccess={({ nouvellesTranches, queued, numeroRecu }) => {
-            setPaiements(nouvellesTranches)
-            setVersements((prev) => [
-              {
-                id: `local-${Date.now()}`,
-                numero_recu: numeroRecu ?? 'en attente',
-                date_versement: new Date().toISOString().slice(0, 10),
-                montant: nouvellesTranches.reduce((a, t, i) => a + (t.montant_paye - paiements[i].montant_paye), 0),
-                mode_paiement: 'especes',
-                caissier_nom: '—',
-              },
-              ...prev,
-            ])
-            setVersementEnAttente(queued)
-            setModalOuvert(false)
-          }}
+          onSuccess={() => setModalOuvert(false)}
         />
       )}
     </div>

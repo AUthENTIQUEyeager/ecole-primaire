@@ -1,27 +1,31 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { DocumentsView } from '@/components/documents/DocumentsView'
 
-export const dynamic = 'force-dynamic'
+export default function DocumentsPage() {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [eleves, classes, configRows] = await Promise.all([
+      localDB.eleves.where('actif').equals(1).toArray(),
+      localDB.classes.toArray(),
+      localDB.config.toArray(),
+    ])
+    const classesById = new Map(classes.map((c) => [c.id, c]))
+    const elevesEnrichis = eleves
+      .map((e) => ({ ...e, classe_nom: classesById.get(e.classe_id)?.nom ?? '' }))
+      .sort((a, b) => (a.nom + a.prenom).localeCompare(b.nom + b.prenom))
+    const config = Object.fromEntries(configRows.map((r) => [r.key, r.value]))
+    return { eleves: elevesEnrichis, config }
+  }, [])
 
-async function getData() {
-  const [eleves, config] = await Promise.all([
-    db.execute(`
-      SELECT e.id, e.nom, e.prenom, e.matricule, e.annee_scolaire, e.classe_id, e.photo_url, c.nom as classe_nom
-      FROM eleves e JOIN classes c ON c.id = e.classe_id
-      WHERE e.actif = 1 ORDER BY e.nom, e.prenom
-    `),
-    db.execute(`SELECT key, value FROM config`),
-  ])
-  const configObj = Object.fromEntries(config.rows.map((r) => [r.key, r.value as string]))
-  return { eleves: eleves.rows as any[], config: configObj }
-}
+  if (!data) return <p className="text-sm text-muted">Chargement...</p>
 
-export default async function DocumentsPage() {
-  const { eleves, config } = await getData()
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Documents</h1>
-      <DocumentsView eleves={eleves} config={config} />
+      <DocumentsView eleves={data.eleves as any[]} config={data.config} />
     </div>
   )
 }

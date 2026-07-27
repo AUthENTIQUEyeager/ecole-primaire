@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const parsed = matiereSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
   const data = parsed.data
-  const id = randomUUID()
+  const id = typeof body.id === 'string' && body.id ? body.id : randomUUID()
 
   await db.execute({
     sql: `INSERT INTO matieres (id, nom, code, coefficient) VALUES (?, ?, ?, ?)`,

@@ -1,35 +1,45 @@
-import { db } from '@/lib/db'
+'use client'
+
+import { useLiveQuery } from 'dexie-react-hooks'
+import { localDB } from '@/lib/sync/indexedDB'
 import { AbsencesView } from '@/components/absences/AbsencesView'
 
-export const dynamic = 'force-dynamic'
+export default function AbsencesPage() {
+  const data = useLiveQuery(async () => {
+    if (!localDB) return null
+    const [absences, classes, eleves] = await Promise.all([
+      localDB.absences.toArray(),
+      localDB.classes.toArray(),
+      localDB.eleves.toArray(),
+    ])
+    const classesById = new Map(classes.map((c) => [c.id, c]))
+    const elevesById = new Map(eleves.map((e) => [e.id, e]))
 
-async function getData() {
-  const [absences, classes, stats] = await Promise.all([
-    db.execute(`
-      SELECT a.*, e.nom, e.prenom, c.nom as classe_nom
-      FROM absences a
-      JOIN eleves e ON e.id = a.eleve_id
-      JOIN classes c ON c.id = e.classe_id
-      ORDER BY a.date_absence DESC LIMIT 200
-    `),
-    db.execute(`SELECT id, nom FROM classes ORDER BY nom`),
-    db.execute(`
-      SELECT c.nom, COUNT(a.id) as total
-      FROM classes c
-      LEFT JOIN eleves e ON e.classe_id = c.id
-      LEFT JOIN absences a ON a.eleve_id = e.id AND a.type = 'absence'
-      GROUP BY c.id ORDER BY c.nom
-    `),
-  ])
-  return { absences: absences.rows as any[], classes: classes.rows as any[], stats: stats.rows as any[] }
-}
+    const absencesEnrichies = absences
+      .map((a) => {
+        const e = elevesById.get(a.eleve_id)
+        const c = e ? classesById.get(e.classe_id) : undefined
+        return { ...a, nom: e?.nom ?? '', prenom: e?.prenom ?? '', classe_nom: c?.nom ?? '' }
+      })
+      .sort((a, b) => (a.date_absence < b.date_absence ? 1 : -1))
+      .slice(0, 200)
 
-export default async function AbsencesPage() {
-  const { absences, classes, stats } = await getData()
+    const stats = classes
+      .map((c) => ({
+        nom: c.nom,
+        total: absences.filter((a) => a.type === 'absence' && elevesById.get(a.eleve_id)?.classe_id === c.id).length,
+      }))
+      .sort((a, b) => a.nom.localeCompare(b.nom))
+
+    return { absences: absencesEnrichies, classes: classes.map((c) => ({ id: c.id, nom: c.nom })), stats }
+  }, [])
+
+  if (!data) return <p className="text-sm text-muted">Chargement...</p>
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-text">Absences</h1>
-      <AbsencesView absences={absences} classes={classes} stats={stats} />
+      <AbsencesView absences={data.absences as any} classes={data.classes} stats={data.stats} />
     </div>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Save, Loader2 } from 'lucide-react'
-import { mutate } from '@/lib/sync/syncManager'
+import { noteRepo } from '@/lib/localdb/repo'
 
 interface Eleve { id: string; nom: string; prenom: string }
 interface Matiere { id: string; nom: string; coefficient: number }
@@ -48,7 +48,7 @@ export function NoteGrid({
       return
     }
 
-    const res = await mutate({ endpoint: '/api/notes', method: 'POST', operation: 'INSERT', payload: notes })
+    const res = await noteRepo.createBatch(notes)
     setEnregistrement(false)
 
     if (res?.error) {

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, Megaphone } from 'lucide-react'
 import { useSession } from 'next-auth/react'
-import { mutate, genererId } from '@/lib/sync/syncManager'
+import { annonceRepo } from '@/lib/localdb/repo'
 
 interface Annonce {
   id: string
@@ -20,10 +20,9 @@ const COULEURS: Record<string, string> = {
   urgente: 'bg-red-100 text-red-700',
 }
 
-export function AnnoncesView({ annonces: annoncesInitiales }: { annonces: Annonce[] }) {
+// `annonces` vient d'une requête Dexie réactive dans la page parente.
+export function AnnoncesView({ annonces }: { annonces: Annonce[] }) {
   const { data: session } = useSession()
-  const [annonces, setAnnonces] = useState(annoncesInitiales)
-  const [enAttenteIds, setEnAttenteIds] = useState<Set<string>>(new Set())
   const [afficherForm, setAfficherForm] = useState(false)
   const [titre, setTitre] = useState('')
   const [contenu, setContenu] = useState('')
@@ -33,46 +32,23 @@ export function AnnoncesView({ annonces: annoncesInitiales }: { annonces: Annonc
 
   async function enregistrer() {
     if (!titre || !contenu) return
-    const id = genererId()
-    const nouvelle: Annonce = {
-      id,
+
+    setAfficherForm(false)
+    const res = await annonceRepo.create({
       titre,
       contenu,
+      auteur_nom: session?.user?.name ?? 'Admin',
       priorite,
       date_debut: new Date().toISOString().slice(0, 10),
       date_fin: dateFin || undefined,
-    }
-
-    // Optimiste : visible immédiatement, connexion ou non.
-    setAnnonces((prev) => [nouvelle, ...prev])
-    setAfficherForm(false)
-    setTitre(''); setContenu(''); setDateFin('')
-
-    const res = await mutate({
-      endpoint: '/api/annonces',
-      method: 'POST',
-      operation: 'INSERT',
-      payload: {
-        titre: nouvelle.titre,
-        contenu: nouvelle.contenu,
-        auteur_nom: session?.user?.name ?? 'Admin',
-        priorite: nouvelle.priorite,
-        date_debut: nouvelle.date_debut,
-        date_fin: nouvelle.date_fin,
-      },
     })
 
     if (res?.error) {
       setErreur("Échec de la publication de l'annonce.")
-      setAnnonces((prev) => prev.filter((a) => a.id !== id))
       return
     }
     setErreur(null)
-    if (res?.queued) {
-      setEnAttenteIds((prev) => new Set(prev).add(id))
-    } else if (res?.id) {
-      setAnnonces((prev) => prev.map((a) => (a.id === id ? { ...a, id: res.id } : a)))
-    }
+    setTitre(''); setContenu(''); setDateFin('')
   }
 
   return (
@@ -110,9 +86,6 @@ export function AnnoncesView({ annonces: annoncesInitiales }: { annonces: Annonc
             <div className="mb-1 flex items-center justify-between">
               <h3 className="flex items-center gap-2 font-medium text-text">
                 <Megaphone size={16} /> {a.titre}
-                {enAttenteIds.has(a.id) && (
-                  <span className="badge bg-amber-100 text-amber-700">en attente</span>
-                )}
               </h3>
               <span className={`badge ${COULEURS[a.priorite]}`}>{a.priorite}</span>
             </div>
