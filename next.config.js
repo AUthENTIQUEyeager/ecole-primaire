@@ -38,12 +38,16 @@ const withPWA = require('next-pwa')({
     },
     ...runtimeCaching,
   ],
-  // Si une page jamais visitée en ligne est demandée hors connexion (lien
-  // profond, favori), on retombe sur le tableau de bord plutôt que sur
-  // l'écran d'erreur du navigateur.
-  fallbacks: {
-    document: '/admin/dashboard',
-  },
+  // PAS de `fallbacks.document` pointant vers une page protégée
+  // (ex : /admin/dashboard) : next-pwa la précache automatiquement à
+  // l'installation du service worker, qui peut avoir lieu AVANT la
+  // connexion (ex : sur /login). Le contrôle d'accès redirige alors cette
+  // tentative de précache, Workbox rejette toute réponse redirigée par
+  // sécurité, et comme l'installation est atomique, TOUT le service worker
+  // échoue à s'installer — c'était la cause du "vous êtes hors ligne" au
+  // lancement à froid de la PWA. `cacheOnFrontEndNav` suffit : il capture
+  // le vrai contenu authentifié pendant la navigation normale, sans jamais
+  // déclencher ce précache à risque.
 })
 
 /** @type {import('next').NextConfig} */
