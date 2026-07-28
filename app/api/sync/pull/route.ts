@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
-import { auth } from '@/lib/auth'
+import { getIdentity } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +14,8 @@ export const dynamic = 'force-dynamic'
  * est plus simple ET plus robuste sur une connexion qui coupe en cours de
  * route — pas d'état "à moitié synchronisé" à gérer.
  */
-export async function GET() {
-  const session = await auth()
+export async function GET(req: NextRequest) {
+  const session = await getIdentity(req)
   if (!session || session.user.role !== 'admin') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
   }

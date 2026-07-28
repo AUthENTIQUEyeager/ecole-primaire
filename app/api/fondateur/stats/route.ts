@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { db } from '@/lib/db'
-import { auth } from '@/lib/auth'
+import { getIdentity } from '@/lib/apiAuth'
 import { cached } from '@/lib/redis'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const session = await auth()
+export async function GET(req: NextRequest) {
+  const session = await getIdentity(req)
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
 
   const stats = await cached('fondateur:stats', 300, async () => {

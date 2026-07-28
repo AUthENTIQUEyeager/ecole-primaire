@@ -112,6 +112,33 @@ d'environnement. Remplacé par `trustHost: true` (`lib/auth.config.ts`), qui
 déduit l'URL depuis la requête — plus besoin de définir `NEXTAUTH_URL` sur
 Vercel (et il ne faut surtout pas le faire, sous peine de reproduire le bug).
 
+## Pivot : application de bureau pour l'école (au lieu du PWA)
+
+Après plusieurs bugs de fiabilité propres aux service workers (installation
+qui échoue si elle se produit avant connexion, cache écrasé par une config
+personnalisée, pages jamais mises en cache lors d'une navigation cliquée...),
+le PWA a été abandonné **côté école** au profit d'une vraie application de
+bureau (Tauri) — voir le dossier `desktop/` (projet séparé, à côté de celui-ci).
+Elle réutilise cette API à distance exactement comme le faisait le PWA.
+
+Le tableau de bord de la fondatrice (`app/fondateur`) n'est **pas concerné** :
+il reste un site web normal, consulté depuis un navigateur — elle n'a pas
+besoin de fonctionner hors connexion.
+
+**Changements apportés ici pour permettre ce pivot :**
+- `lib/apiAuth.ts` : accepte soit une session NextAuth (cookie, navigateur),
+  soit un jeton `Authorization: Bearer` (app de bureau — qui n'a pas de
+  cookies partagés avec ce domaine).
+- `app/api/auth/desktop-login/route.ts` : échange email/mot de passe contre
+  un jeton longue durée (180 jours — poste fixe, pas d'appareil partagé).
+- `middleware.ts` : ajoute les en-têtes CORS sur toutes les routes `/api/*`,
+  nécessaires pour que l'app de bureau (autre origine) puisse les appeler.
+- Les 15 routes API existantes utilisent maintenant `getIdentity(req)` au
+  lieu de `auth()` directement — comportement inchangé pour le navigateur.
+
+Le PWA (service worker, next-pwa) reste en place dans ce projet au cas où —
+mais n'est plus l'usage principal recommandé pour le personnel de l'école.
+
 ## Ce qui reste à faire avant la mise en production
 
 - **Connecter de vrais identifiants Turso/Upstash** — le code compile et

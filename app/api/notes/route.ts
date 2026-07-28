@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { auth } from '@/lib/auth'
+import { getIdentity } from '@/lib/apiAuth'
 import { noteSchema } from '@/lib/validations/schemas'
 import { z } from 'zod'
 
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 /** Enregistrement en lot depuis la grille de saisie des notes (bouton "Tout enregistrer"). */
 export async function POST(req: NextRequest) {
-  const session = await auth()
+  const session = await getIdentity(req)
   if (!session || session.user.role !== 'admin') {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
   }
