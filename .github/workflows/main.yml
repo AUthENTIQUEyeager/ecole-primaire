@@ -1,0 +1,44 @@
+name: Construire l'application de bureau
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'app-v*'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+          - platform: macos-latest
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Installer les dependances (npm)
+        run: npm install
+
+      - name: Construire l'application de bureau
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: app-v__VERSION__
+          releaseName: 'Ecole Primaire Les Etoiles - Bureau v__VERSION__'
+          releaseDraft: true
+          prerelease: false
