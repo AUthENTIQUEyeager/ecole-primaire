@@ -137,6 +137,54 @@ CREATE TABLE IF NOT EXISTS config (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS evenements (
+  id TEXT PRIMARY KEY,
+  nom TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('sortie', 'cloture', 'autre')),
+  description TEXT,
+  montant_cotisation INTEGER NOT NULL,
+  date_evenement TEXT NOT NULL,
+  -- 'toutes' ou une liste d'ids de classes séparés par des virgules
+  classes_ids TEXT NOT NULL,
+  statut TEXT NOT NULL DEFAULT 'actif' CHECK (statut IN ('actif', 'cloture')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS evenement_cotisations (
+  id TEXT PRIMARY KEY,
+  evenement_id TEXT NOT NULL REFERENCES evenements(id) ON DELETE CASCADE,
+  eleve_id TEXT NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+  montant_du INTEGER NOT NULL,
+  montant_paye INTEGER NOT NULL DEFAULT 0,
+  statut TEXT NOT NULL DEFAULT 'en_attente'
+    CHECK (statut IN ('en_attente', 'en_cours', 'en_retard_partiel', 'en_retard_total', 'soldee')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS evenement_versements (
+  id TEXT PRIMARY KEY,
+  cotisation_id TEXT NOT NULL REFERENCES evenement_cotisations(id) ON DELETE CASCADE,
+  eleve_id TEXT NOT NULL REFERENCES eleves(id) ON DELETE CASCADE,
+  evenement_id TEXT NOT NULL REFERENCES evenements(id) ON DELETE CASCADE,
+  montant INTEGER NOT NULL,
+  date_versement TEXT NOT NULL,
+  mode_paiement TEXT NOT NULL CHECK (mode_paiement IN ('especes', 'mobile_money', 'cheque')),
+  numero_recu TEXT NOT NULL UNIQUE,
+  caissier_nom TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS evenement_depenses (
+  id TEXT PRIMARY KEY,
+  evenement_id TEXT NOT NULL REFERENCES evenements(id) ON DELETE CASCADE,
+  categorie TEXT NOT NULL,
+  description TEXT NOT NULL,
+  montant INTEGER NOT NULL,
+  date_depense TEXT NOT NULL,
+  created_by_nom TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS sync_queue (
   id TEXT PRIMARY KEY,
   operation TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
@@ -164,3 +212,7 @@ CREATE INDEX IF NOT EXISTS idx_paiements_statut ON paiements(statut);
 CREATE INDEX IF NOT EXISTS idx_versements_eleve ON versements(eleve_id);
 CREATE INDEX IF NOT EXISTS idx_notes_eleve_periode ON notes(eleve_id, periode);
 CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_evenement_cotisations_evenement ON evenement_cotisations(evenement_id);
+CREATE INDEX IF NOT EXISTS idx_evenement_cotisations_eleve ON evenement_cotisations(eleve_id);
+CREATE INDEX IF NOT EXISTS idx_evenement_versements_evenement ON evenement_versements(evenement_id);
+CREATE INDEX IF NOT EXISTS idx_evenement_depenses_evenement ON evenement_depenses(evenement_id);

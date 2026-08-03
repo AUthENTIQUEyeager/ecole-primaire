@@ -3,7 +3,7 @@ import './globals.css'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: 'École Primaire Privée Les Étoiles — Gestion (bureau)',
+  title: 'Norio — Gestion (bureau)',
   description: 'Application de bureau — fonctionne sans connexion, synchronise automatiquement.',
 }
 

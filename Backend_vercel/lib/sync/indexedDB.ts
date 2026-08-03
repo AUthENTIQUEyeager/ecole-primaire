@@ -118,6 +118,48 @@ export interface ConfigCache {
   value: string
 }
 
+export interface EvenementCache {
+  id: string
+  nom: string
+  type: 'sortie' | 'cloture' | 'autre'
+  description?: string
+  montant_cotisation: number
+  date_evenement: string
+  classes_ids: string
+  statut: 'actif' | 'cloture'
+}
+
+export interface EvenementCotisationCache {
+  id: string
+  evenement_id: string
+  eleve_id: string
+  montant_du: number
+  montant_paye: number
+  statut: string
+}
+
+export interface EvenementVersementCache {
+  id: string
+  cotisation_id: string
+  eleve_id: string
+  evenement_id: string
+  montant: number
+  date_versement: string
+  mode_paiement: 'especes' | 'mobile_money' | 'cheque'
+  numero_recu: string
+  caissier_nom: string
+}
+
+export interface EvenementDepenseCache {
+  id: string
+  evenement_id: string
+  categorie: string
+  description: string
+  montant: number
+  date_depense: string
+  created_by_nom: string
+}
+
 export interface QueueItem {
   id: string
   operation: 'INSERT' | 'UPDATE' | 'DELETE'
@@ -149,6 +191,10 @@ class EcolePrimaireDB extends Dexie {
   config!: Table<ConfigCache, string>
   syncQueue!: Table<QueueItem, string>
   meta!: Table<MetaCache, string>
+  evenements!: Table<EvenementCache, string>
+  evenementCotisations!: Table<EvenementCotisationCache, string>
+  evenementVersements!: Table<EvenementVersementCache, string>
+  evenementDepenses!: Table<EvenementDepenseCache, string>
 
   constructor() {
     super('ecole_primaire_db')
@@ -181,6 +227,29 @@ class EcolePrimaireDB extends Dexie {
       salaires: 'id, mois, statut',
       annonces: 'id, date_debut',
       meta: 'key',
+    })
+
+    // v3 ajoute les tables "événements" (sorties, clôtures) : cotisations à
+    // montant fixe réglables en plusieurs versements, plus les dépenses
+    // propres à chaque événement (pour calculer son solde).
+    this.version(3).stores({
+      eleves: 'id, classe_id, matricule, actif',
+      classes: 'id, nom',
+      matieres: 'id, code',
+      config: 'key',
+      paiements: 'id, eleve_id, statut',
+      syncQueue: 'id, status, created_at',
+      notes: 'id, eleve_id, matiere_id, periode',
+      absences: 'id, eleve_id, date_absence, type',
+      versements: 'id, eleve_id, paiement_id, date_versement',
+      depenses: 'id, categorie, date_depense',
+      salaires: 'id, mois, statut',
+      annonces: 'id, date_debut',
+      meta: 'key',
+      evenements: 'id, statut, date_evenement',
+      evenementCotisations: 'id, evenement_id, eleve_id, statut',
+      evenementVersements: 'id, evenement_id, cotisation_id, eleve_id',
+      evenementDepenses: 'id, evenement_id, categorie',
     })
   }
 }

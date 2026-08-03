@@ -14,6 +14,7 @@ import {
   Banknote,
   Receipt,
   Settings,
+  PartyPopper,
 } from 'lucide-react'
 
 const NAV = [
@@ -23,6 +24,7 @@ const NAV = [
   { href: '/admin/notes', label: 'Notes & Bulletins', icon: BookOpen },
   { href: '/admin/absences', label: 'Absences', icon: CalendarX },
   { href: '/admin/paiements', label: 'Paiements', icon: Wallet },
+  { href: '/admin/evenements', label: 'Sorties & Clôtures', icon: PartyPopper },
   { href: '/admin/documents', label: 'Documents', icon: FileText },
   { href: '/admin/annonces', label: 'Annonces', icon: Megaphone },
   { href: '/admin/salaires', label: 'Salaires', icon: Banknote },
@@ -36,11 +38,14 @@ export function Sidebar() {
   return (
     <aside className="hidden w-60 shrink-0 border-r border-border bg-surface md:flex md:flex-col">
       <div className="flex h-16 items-center gap-2 border-b border-border px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-card bg-primary text-white">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-card text-white"
+          style={{ background: 'linear-gradient(135deg, #4f46e5, #ff6a3d)' }}
+        >
           <School size={18} />
         </div>
         <span className="text-sm font-semibold leading-tight text-text">
-          Les Étoiles
+          Norio
           <br />
           <span className="font-normal text-muted">Gestion scolaire</span>
         </span>

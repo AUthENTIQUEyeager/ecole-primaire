@@ -154,6 +154,7 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
                   <span>{v.numero_recu} — {v.montant.toLocaleString('fr-FR')} FCFA — {v.date_versement}</span>
                   <PDFActions
                     fileName={`recu-${v.numero_recu}.pdf`}
+                    depsKey={v.numero_recu}
                     document={
                       <RecuDocument
                         data={{
@@ -206,6 +207,7 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
             <PDFActions
               fileName={`bulletin-${eleve.matricule}-${periode}.pdf`}
               downloadLabel="Télécharger le bulletin"
+              depsKey={`${eleve.matricule}-${periode}-${appreciation}-${moyenneGenerale}-${rang}`}
               document={
                 <BulletinDocument
                   data={{
@@ -242,6 +244,7 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
                   <PDFActions
                     fileName={`billet-${eleve.prenom}-${a.date_absence}.pdf`}
                     downloadLabel="Télécharger le billet"
+                    depsKey={a.id}
                     document={
                       <BilletDocument
                         data={{
@@ -266,6 +269,7 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
           <PDFActions
             fileName={`carte-${eleve.matricule}.pdf`}
             downloadLabel="Télécharger la carte"
+            depsKey={eleve.matricule}
             document={
               <CarteDocument
                 data={{
@@ -311,6 +315,7 @@ function ConvocationForm({ eleve, config, logoUrl }: { eleve: Eleve; config: Rec
       <PDFActions
         fileName={`convocation-${eleve.prenom}.pdf`}
         downloadLabel="Télécharger la convocation"
+        depsKey={`${eleve.prenom}-${objet}-${date}-${lieu}`}
         document={
           <ConvocationDocument
             data={{

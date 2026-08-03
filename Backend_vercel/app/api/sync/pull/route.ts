@@ -32,6 +32,10 @@ export async function GET(req: NextRequest) {
     salaires,
     annonces,
     config,
+    evenements,
+    evenementCotisations,
+    evenementVersements,
+    evenementDepenses,
   ] = await Promise.all([
     db.execute(`SELECT * FROM classes`),
     db.execute(`SELECT * FROM matieres`),
@@ -44,6 +48,10 @@ export async function GET(req: NextRequest) {
     db.execute(`SELECT * FROM salaires`),
     db.execute(`SELECT * FROM annonces`),
     db.execute(`SELECT key, value FROM config`),
+    db.execute(`SELECT * FROM evenements`),
+    db.execute(`SELECT * FROM evenement_cotisations`),
+    db.execute(`SELECT * FROM evenement_versements`),
+    db.execute(`SELECT * FROM evenement_depenses`),
   ])
 
   return NextResponse.json({
@@ -58,6 +66,10 @@ export async function GET(req: NextRequest) {
     salaires: salaires.rows,
     annonces: annonces.rows,
     config: config.rows,
+    evenements: evenements.rows,
+    evenementCotisations: evenementCotisations.rows,
+    evenementVersements: evenementVersements.rows,
+    evenementDepenses: evenementDepenses.rows,
     syncedAt: new Date().toISOString(),
   })
 }

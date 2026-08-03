@@ -2,7 +2,7 @@ import { localDB } from '../sync/indexedDB'
 import { apiFetch } from '../apiConfig'
 
 /**
- * Télécharge l'intégralité des données (13 tables) en un seul aller-retour
+ * Télécharge l'intégralité des données (17 tables) en un seul aller-retour
  * réseau vers le serveur distant, et remplace le contenu local en une
  * transaction. Appelée au premier chargement en ligne et à chaque
  * reconnexion (après le vidage de la file de synchronisation).
@@ -34,6 +34,10 @@ export async function pullToutesLesDonnees(): Promise<{ ok: boolean; syncedAt?: 
       localDB.annonces,
       localDB.config,
       localDB.meta,
+      localDB.evenements,
+      localDB.evenementCotisations,
+      localDB.evenementVersements,
+      localDB.evenementDepenses,
     ],
     async () => {
       await Promise.all([
@@ -48,6 +52,10 @@ export async function pullToutesLesDonnees(): Promise<{ ok: boolean; syncedAt?: 
         localDB.salaires.clear().then(() => localDB.salaires.bulkAdd(data.salaires ?? [])),
         localDB.annonces.clear().then(() => localDB.annonces.bulkAdd(data.annonces ?? [])),
         localDB.config.clear().then(() => localDB.config.bulkAdd(data.config ?? [])),
+        localDB.evenements.clear().then(() => localDB.evenements.bulkAdd(data.evenements ?? [])),
+        localDB.evenementCotisations.clear().then(() => localDB.evenementCotisations.bulkAdd(data.evenementCotisations ?? [])),
+        localDB.evenementVersements.clear().then(() => localDB.evenementVersements.bulkAdd(data.evenementVersements ?? [])),
+        localDB.evenementDepenses.clear().then(() => localDB.evenementDepenses.bulkAdd(data.evenementDepenses ?? [])),
       ])
       await localDB.meta.put({ key: 'lastFullSync', value: data.syncedAt ?? new Date().toISOString() })
     }

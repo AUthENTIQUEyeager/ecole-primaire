@@ -99,6 +99,35 @@ export const classeUpdateSchema = z.object({
   enseignant_principal: z.string().optional(),
 })
 
+export const evenementSchema = z.object({
+  nom: z.string().min(1),
+  type: z.enum(['sortie', 'cloture', 'autre']),
+  description: z.string().optional(),
+  montant_cotisation: z.number().int().positive(),
+  date_evenement: z.string().min(1),
+  // 'toutes' ou une liste d'ids de classes
+  classes_ids: z.union([z.literal('toutes'), z.array(z.string().min(1)).min(1)]),
+})
+
+export const evenementVersementSchema = z.object({
+  cotisation_id: z.string().min(1),
+  eleve_id: z.string().min(1),
+  evenement_id: z.string().min(1),
+  montant: z.number().int().positive('Le montant doit être positif'),
+  date_versement: z.string().min(1),
+  mode_paiement: z.enum(['especes', 'mobile_money', 'cheque']),
+  caissier_nom: z.string().min(1),
+})
+
+export const evenementDepenseSchema = z.object({
+  evenement_id: z.string().min(1),
+  categorie: z.string().min(1),
+  description: z.string().min(1),
+  montant: z.number().int().positive(),
+  date_depense: z.string().min(1),
+  created_by_nom: z.string().min(1),
+})
+
 export type EleveInput = z.infer<typeof eleveSchema>
 export type AbsenceInput = z.infer<typeof absenceSchema>
 export type NoteInput = z.infer<typeof noteSchema>
@@ -106,3 +135,6 @@ export type VersementInput = z.infer<typeof versementSchema>
 export type DepenseInput = z.infer<typeof depenseSchema>
 export type SalaireInput = z.infer<typeof salaireSchema>
 export type AnnonceInput = z.infer<typeof annonceSchema>
+export type EvenementInput = z.infer<typeof evenementSchema>
+export type EvenementVersementInput = z.infer<typeof evenementVersementSchema>
+export type EvenementDepenseInput = z.infer<typeof evenementDepenseSchema>

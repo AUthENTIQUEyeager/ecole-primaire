@@ -5,11 +5,12 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#2563eb',
+        primary: '#4f46e5',
         success: '#059669',
         warning: '#d97706',
         danger: '#dc2626',
-        accent: '#7c3aed',
+        accent: '#e1198f',
+        pop: '#ff6a3d',
         bg: '#f8fafc',
         surface: '#ffffff',
         border: '#e2e8f0',

@@ -275,3 +275,136 @@ export const matiereRepo = {
     return { queued: !!res?.queued, error: !!res?.error }
   },
 }
+
+// ---------------------------------------------------------------------------
+// Événements (sorties, clôtures) — cotisation à montant fixe par élève,
+// réglable en plusieurs versements, avec suivi des dépenses de l'événement.
+// ---------------------------------------------------------------------------
+
+export const evenementRepo = {
+  /** Crée l'événement et génère localement une cotisation pour chaque élève concerné. */
+  async create(payload: {
+    nom: string
+    type: 'sortie' | 'cloture' | 'autre'
+    description?: string
+    montant_cotisation: number
+    date_evenement: string
+    classes_ids: 'toutes' | string[]
+  }) {
+    const id = genererId()
+    let nbEleves = 0
+
+    if (localDB) {
+      await localDB.evenements.put({
+        ...payload,
+        id,
+        classes_ids: payload.classes_ids === 'toutes' ? 'toutes' : payload.classes_ids.join(','),
+        statut: 'actif',
+      } as any)
+
+      const tousLesEleves = await localDB.eleves.where('actif').equals(1).toArray()
+      const elevesConcernes =
+        payload.classes_ids === 'toutes'
+          ? tousLesEleves
+          : tousLesEleves.filter((e) => (payload.classes_ids as string[]).includes(e.classe_id))
+
+      await localDB.evenementCotisations.bulkPut(
+        elevesConcernes.map((e) => ({
+          id: genererId(),
+          evenement_id: id,
+          eleve_id: e.id,
+          montant_du: payload.montant_cotisation,
+          montant_paye: 0,
+          statut: 'en_attente',
+        }))
+      )
+      nbEleves = elevesConcernes.length
+    }
+
+    const res = await mutate({ endpoint: '/api/evenements', method: 'POST', operation: 'INSERT', payload: { ...payload, id } })
+    return { id, nbEleves, queued: !!res?.queued, error: !!res?.error }
+  },
+
+  async cloturer(id: string) {
+    if (localDB) await localDB.evenements.update(id, { statut: 'cloture' })
+    const res = await mutate({ endpoint: `/api/evenements/${id}`, method: 'PUT', operation: 'UPDATE', payload: { statut: 'cloture' } })
+    return { queued: !!res?.queued, error: !!res?.error }
+  },
+
+  async reactiver(id: string) {
+    if (localDB) await localDB.evenements.update(id, { statut: 'actif' })
+    const res = await mutate({ endpoint: `/api/evenements/${id}`, method: 'PUT', operation: 'UPDATE', payload: { statut: 'actif' } })
+    return { queued: !!res?.queued, error: !!res?.error }
+  },
+
+  async remove(id: string) {
+    if (localDB) {
+      await localDB.transaction('rw', [localDB.evenements, localDB.evenementCotisations, localDB.evenementVersements, localDB.evenementDepenses], async () => {
+        await localDB.evenements.delete(id)
+        await localDB.evenementCotisations.where('evenement_id').equals(id).delete()
+        await localDB.evenementVersements.where('evenement_id').equals(id).delete()
+        await localDB.evenementDepenses.where('evenement_id').equals(id).delete()
+      })
+    }
+    const res = await mutate({ endpoint: `/api/evenements/${id}`, method: 'DELETE', operation: 'DELETE', payload: {} })
+    return { queued: !!res?.queued, error: !!res?.error }
+  },
+}
+
+export const evenementVersementRepo = {
+  async create(input: {
+    cotisation_id: string
+    eleve_id: string
+    evenement_id: string
+    montant: number
+    date_versement: string
+    mode_paiement: 'especes' | 'mobile_money' | 'cheque'
+    caissier_nom: string
+  }) {
+    if (!localDB) return { error: true }
+
+    const cotisation = await localDB.evenementCotisations.get(input.cotisation_id)
+    const evenement = await localDB.evenements.get(input.evenement_id)
+    if (!cotisation || !evenement) return { error: true, details: 'Cotisation ou événement introuvable' }
+
+    const nouveauMontantPaye = cotisation.montant_paye + input.montant
+    const statut = computeStatut(nouveauMontantPaye, cotisation.montant_du, evenement.date_evenement)
+    await localDB.evenementCotisations.update(input.cotisation_id, { montant_paye: nouveauMontantPaye, statut })
+
+    const id = genererId()
+    await localDB.evenementVersements.put({
+      id,
+      cotisation_id: input.cotisation_id,
+      eleve_id: input.eleve_id,
+      evenement_id: input.evenement_id,
+      montant: input.montant,
+      date_versement: input.date_versement,
+      mode_paiement: input.mode_paiement,
+      numero_recu: 'En attente de synchronisation',
+      caissier_nom: input.caissier_nom,
+    } as any)
+
+    const res = await mutate({ endpoint: '/api/evenements/versements', method: 'POST', operation: 'INSERT', payload: { ...input, id } })
+
+    if (!res?.error && !res?.queued && res?.numero_recu) {
+      await localDB.evenementVersements.update(id, { numero_recu: res.numero_recu })
+    }
+
+    return { id, numeroRecu: res?.numero_recu, queued: !!res?.queued, error: !!res?.error }
+  },
+}
+
+export const evenementDepenseRepo = {
+  async create(payload: { evenement_id: string; categorie: string; description: string; montant: number; date_depense: string; created_by_nom: string }) {
+    const id = genererId()
+    if (localDB) await localDB.evenementDepenses.put({ ...payload, id } as any)
+    const res = await mutate({ endpoint: '/api/evenements/depenses', method: 'POST', operation: 'INSERT', payload: { ...payload, id } })
+    return { id, queued: !!res?.queued, error: !!res?.error }
+  },
+
+  async remove(id: string) {
+    if (localDB) await localDB.evenementDepenses.delete(id)
+    const res = await mutate({ endpoint: `/api/evenements/depenses?id=${id}`, method: 'DELETE', operation: 'DELETE', payload: {} })
+    return { queued: !!res?.queued, error: !!res?.error }
+  },
+}

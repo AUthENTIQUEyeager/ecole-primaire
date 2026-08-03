@@ -37,10 +37,13 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-card bg-primary text-white">
+          <div
+            className="mb-3 flex h-12 w-12 items-center justify-center rounded-card text-white"
+            style={{ background: 'linear-gradient(135deg, #4f46e5, #ff6a3d)' }}
+          >
             <School size={24} />
           </div>
-          <h1 className="text-lg font-semibold text-text">École Primaire Privée Les Étoiles</h1>
+          <h1 className="text-lg font-semibold text-text">Norio</h1>
           <p className="text-sm text-muted">Plateforme de gestion scolaire</p>
         </div>
 
