@@ -390,7 +390,7 @@ export const evenementVersementRepo = {
       await localDB.evenementVersements.update(id, { numero_recu: res.numero_recu })
     }
 
-    return { id, numeroRecu: res?.numero_recu, queued: !!res?.queued, error: !!res?.error }
+    return { id, numeroRecu: res?.numero_recu, queued: !!res?.queued, error: !!res?.error, details: res?.details, status: res?.status }
   },
 }
 

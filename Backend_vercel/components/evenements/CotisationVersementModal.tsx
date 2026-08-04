@@ -59,7 +59,15 @@ export function CotisationVersementModal({
     setChargement(false)
 
     if (res?.error) {
-      setErreur("Erreur lors de l'enregistrement. Réessayez.")
+      const detail =
+        typeof res.details === 'string'
+          ? res.details
+          : res.details
+            ? JSON.stringify(res.details)
+            : null
+      setErreur(
+        `Erreur lors de l'enregistrement${res.status ? ` (${res.status})` : ''}${detail ? ` : ${detail}` : '. Réessayez.'}`
+      )
       return
     }
     onSuccess()
