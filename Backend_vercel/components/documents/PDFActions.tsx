@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { usePDF } from '@react-pdf/renderer'
 import { Download, Printer, Loader2, AlertTriangle } from 'lucide-react'
 
@@ -25,8 +25,19 @@ export function PDFActions({ document, fileName, downloadLabel = 'Télécharger'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const documentStable = useMemo(() => document, [depsKey ?? fileName])
 
-  const [instance] = usePDF({ document: documentStable })
+  const [instance, updateInstance] = usePDF({ document: documentStable })
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+
+  // usePDF ne génère le PDF QU'AU MONTAGE (son effet interne a un tableau de
+  // dépendances vide) : il ignore silencieusement tout changement ultérieur
+  // de `document`. Sans cet effet, le PDF reste figé sur les données du tout
+  // premier rendu (élève, appréciation, champs de formulaire...), sans la
+  // moindre erreur visible. On appelle donc explicitement `updateInstance`
+  // à chaque fois que `documentStable` change réellement.
+  useEffect(() => {
+    updateInstance(documentStable)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentStable])
 
   function imprimer() {
     if (!instance.url || !iframeRef.current) return
