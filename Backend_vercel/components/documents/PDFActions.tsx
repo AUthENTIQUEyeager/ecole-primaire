@@ -74,7 +74,7 @@ export function PDFActions({ document, fileName, downloadLabel = 'Télécharger'
       </button>
       {instance.error && (
         <span className="flex items-center gap-1 text-xs text-danger">
-          <AlertTriangle size={12} /> Échec de la génération du PDF
+          <AlertTriangle size={12} /> Échec : {instance.error}
         </span>
       )}
       {/* Caché visuellement (pas display:none, qui bloquerait l'impression dans certains navigateurs) */}
