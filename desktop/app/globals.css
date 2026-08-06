@@ -27,3 +27,26 @@ body {
 .badge {
   @apply inline-flex items-center rounded px-2 py-0.5 text-xs font-medium;
 }
+
+/* Impression des documents (reçus, bulletins, cartes...) : seule la zone
+   #zone-impression, remplie dynamiquement par ImprimerBouton, doit apparaître
+   sur le papier. On masque le reste via visibility (pas display) pour ne pas
+   perturber la mise en page à l'écran pendant que le portail se prépare. */
+#zone-impression {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #zone-impression,
+  #zone-impression * {
+    visibility: visible;
+  }
+  #zone-impression {
+    display: block;
+    position: fixed;
+    inset: 0;
+  }
+}

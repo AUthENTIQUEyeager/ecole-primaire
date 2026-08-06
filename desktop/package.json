@@ -8,7 +8,6 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@react-pdf/renderer": "^3.4.4",
     "dexie": "^4.0.8",
     "dexie-react-hooks": "^1.1.7",
     "lucide-react": "^0.408.0",
