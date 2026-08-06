@@ -1,21 +1,17 @@
 'use client'
 
-import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
-
-const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 10, fontFamily: 'Helvetica' },
-  header: { alignItems: 'center', marginBottom: 16, borderBottom: '1 solid #e2e8f0', paddingBottom: 10 },
-  logo: { width: 44, height: 44, marginBottom: 6, objectFit: 'contain' },
-  ecole: { fontSize: 14, fontWeight: 700 },
-  sousTitre: { fontSize: 10, color: '#64748b', marginTop: 2 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  table: { marginTop: 8 },
-  tr: { flexDirection: 'row', borderBottom: '1 solid #e2e8f0' },
-  th: { flex: 1, padding: 6, fontWeight: 700, backgroundColor: '#f8fafc' },
-  td: { flex: 1, padding: 6 },
-  moyenneBox: { marginTop: 14, flexDirection: 'row', justifyContent: 'space-between', padding: 10, border: '1 solid #e2e8f0', borderRadius: 4 },
-  signature: { marginTop: 50, flexDirection: 'row', justifyContent: 'space-between' },
-})
+const stylePage: React.CSSProperties = { fontFamily: 'Helvetica, Arial, sans-serif', fontSize: 10, padding: '12mm', color: '#0f172a' }
+const styleHeader: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16, borderBottom: '1px solid #e2e8f0', paddingBottom: 10 }
+const styleLogo: React.CSSProperties = { width: 44, height: 44, marginBottom: 6, objectFit: 'contain' }
+const styleEcole: React.CSSProperties = { fontSize: 14, fontWeight: 700 }
+const styleSousTitre: React.CSSProperties = { fontSize: 10, color: '#64748b', marginTop: 2 }
+const styleInfoRow: React.CSSProperties = { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }
+const styleTable: React.CSSProperties = { marginTop: 8, width: '100%', borderCollapse: 'collapse' }
+const styleTr: React.CSSProperties = { display: 'flex', flexDirection: 'row', borderBottom: '1px solid #e2e8f0' }
+const styleTh: React.CSSProperties = { flex: 1, padding: 6, fontWeight: 700, backgroundColor: '#f8fafc' }
+const styleTd: React.CSSProperties = { flex: 1, padding: 6 }
+const styleMoyenneBox: React.CSSProperties = { marginTop: 14, display: 'flex', flexDirection: 'row', justifyContent: 'space-between', padding: 10, border: '1px solid #e2e8f0', borderRadius: 4 }
+const styleSignature: React.CSSProperties = { marginTop: 50, display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }
 
 export interface BulletinData {
   nomEcole: string
@@ -36,53 +32,52 @@ export interface BulletinData {
 
 export function BulletinDocument({ data }: { data: BulletinData }) {
   return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          {data.logoUrl && <Image src={data.logoUrl} style={styles.logo} />}
-          <Text style={styles.ecole}>{data.nomEcole}</Text>
-          <Text style={styles.sousTitre}>Bulletin de notes — {data.periode} — Année {data.anneeScolaire}</Text>
-        </View>
+    <div style={stylePage}>
+      <style>{'@page { size: A4; margin: 0; }'}</style>
+      <div style={styleHeader}>
+        {data.logoUrl && <img src={data.logoUrl} style={styleLogo} alt="" />}
+        <div style={styleEcole}>{data.nomEcole}</div>
+        <div style={styleSousTitre}>Bulletin de notes — {data.periode} — Année {data.anneeScolaire}</div>
+      </div>
 
-        <View style={styles.infoRow}>
-          <Text>Élève : {data.elevePrenom} {data.eleveNom}</Text>
-          <Text>Matricule : {data.matricule}</Text>
-          <Text>Classe : {data.classe}</Text>
-        </View>
+      <div style={styleInfoRow}>
+        <span>Élève : {data.elevePrenom} {data.eleveNom}</span>
+        <span>Matricule : {data.matricule}</span>
+        <span>Classe : {data.classe}</span>
+      </div>
 
-        <View style={styles.table}>
-          <View style={styles.tr}>
-            <Text style={styles.th}>Matière</Text>
-            <Text style={styles.th}>Coeff.</Text>
-            <Text style={styles.th}>Moyenne /20</Text>
-          </View>
-          {data.lignes.map((l, i) => (
-            <View style={styles.tr} key={i}>
-              <Text style={styles.td}>{l.matiere}</Text>
-              <Text style={styles.td}>{l.coefficient}</Text>
-              <Text style={styles.td}>{l.moyenne.toFixed(2)}</Text>
-            </View>
-          ))}
-        </View>
+      <div style={styleTable}>
+        <div style={styleTr}>
+          <span style={styleTh}>Matière</span>
+          <span style={styleTh}>Coeff.</span>
+          <span style={styleTh}>Moyenne /20</span>
+        </div>
+        {data.lignes.map((l, i) => (
+          <div style={styleTr} key={i}>
+            <span style={styleTd}>{l.matiere}</span>
+            <span style={styleTd}>{l.coefficient}</span>
+            <span style={styleTd}>{l.moyenne.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
 
-        <View style={styles.moyenneBox}>
-          <Text>Moyenne générale : {data.moyenneGenerale.toFixed(2)}/20</Text>
-          <Text>Rang : {data.rang}/{data.effectifClasse}</Text>
-          <Text>Absences non justifiées : {data.absencesNonJustifiees}</Text>
-        </View>
+      <div style={styleMoyenneBox}>
+        <span>Moyenne générale : {data.moyenneGenerale.toFixed(2)}/20</span>
+        <span>Rang : {data.rang}/{data.effectifClasse}</span>
+        <span>Absences non justifiées : {data.absencesNonJustifiees}</span>
+      </div>
 
-        {data.appreciation && (
-          <View style={{ marginTop: 12 }}>
-            <Text style={{ fontWeight: 700, marginBottom: 4 }}>Appréciation générale</Text>
-            <Text>{data.appreciation}</Text>
-          </View>
-        )}
+      {data.appreciation && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Appréciation générale</div>
+          <div>{data.appreciation}</div>
+        </div>
+      )}
 
-        <View style={styles.signature}>
-          <Text>Le Directeur</Text>
-          <Text>Le Parent</Text>
-        </View>
-      </Page>
-    </Document>
+      <div style={styleSignature}>
+        <span>Le Directeur</span>
+        <span>Le Parent</span>
+      </div>
+    </div>
   )
 }

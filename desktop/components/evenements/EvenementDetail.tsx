@@ -8,7 +8,7 @@ import { localDB } from '@/lib/sync/indexedDB'
 import { evenementRepo, evenementDepenseRepo } from '@/lib/localdb/repo'
 import { LABELS_STATUT, COULEURS_STATUT, formatFCFA, type StatutPaiement } from '@/lib/utils/paiement'
 import { CotisationVersementModal } from './CotisationVersementModal'
-import { PDFActions } from '@/components/documents/PDFActions'
+import { ImprimerBouton } from '@/components/documents/ImprimerBouton'
 import { RecuEvenementDocument } from '@/components/documents/RecuEvenementPDF'
 
 const LABELS_TYPE: Record<string, string> = { sortie: 'Sortie', cloture: 'Clôture', autre: 'Autre' }
@@ -220,10 +220,9 @@ export function EvenementDetail({ evenementId }: EvenementDetailProps) {
                   <td className="px-4 py-2 text-muted">{v.date_versement}</td>
                   <td className="px-4 py-2 font-medium text-text">{formatFCFA(v.montant)}</td>
                   <td className="px-4 py-2 text-right">
-                    <PDFActions
+                    <ImprimerBouton
                       fileName={`recu-${v.numero_recu}.pdf`}
-                      downloadLabel="Reçu"
-                      depsKey={v.numero_recu}
+                      downloadLabel="Imprimer"
                       document={
                         <RecuEvenementDocument
                           data={{

@@ -9,7 +9,7 @@ import { BulletinDocument } from '@/components/notes/BulletinPDF'
 import { BilletDocument } from './BilletPDF'
 import { CarteDocument } from './CarteScolairePDF'
 import { ConvocationDocument } from './ConvocationPDF'
-import { PDFActions } from './PDFActions'
+import { ImprimerBouton } from './ImprimerBouton'
 import {
   calculerMoyennesParMatiere,
   calculerMoyenneGenerale,
@@ -146,15 +146,14 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
           <p className="text-sm text-muted">Aucun élève sélectionné.</p>
         ) : section === 'recu' ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted">Sélectionnez un reçu à télécharger ou imprimer.</p>
+            <p className="text-sm text-muted">Sélectionnez un reçu à imprimer.</p>
             {versements.length === 0 && <p className="text-sm text-muted">Aucun versement enregistré pour cet élève.</p>}
             <ul className="space-y-2">
               {versements.map((v) => (
                 <li key={v.id} className="flex items-center justify-between rounded-input border border-border p-3 text-sm">
                   <span>{v.numero_recu} — {v.montant.toLocaleString('fr-FR')} FCFA — {v.date_versement}</span>
-                  <PDFActions
+                  <ImprimerBouton
                     fileName={`recu-${v.numero_recu}.pdf`}
-                    depsKey={v.numero_recu}
                     document={
                       <RecuDocument
                         data={{
@@ -204,10 +203,9 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
                 placeholder="Ex : Trimestre satisfaisant, poursuivre les efforts en calcul."
               />
             </div>
-            <PDFActions
+            <ImprimerBouton
               fileName={`bulletin-${eleve.matricule}-${periode}.pdf`}
-              downloadLabel="Télécharger le bulletin"
-              depsKey={`${eleve.matricule}-${periode}-${appreciation}-${moyenneGenerale}-${rang}`}
+              downloadLabel="Imprimer le bulletin"
               document={
                 <BulletinDocument
                   data={{
@@ -241,10 +239,9 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
               {absences.slice(0, 20).map((a) => (
                 <li key={a.id} className="flex items-center justify-between rounded-input border border-border p-3 text-sm">
                   <span>{a.date_absence} — {a.type}</span>
-                  <PDFActions
+                  <ImprimerBouton
                     fileName={`billet-${eleve.prenom}-${a.date_absence}.pdf`}
-                    downloadLabel="Télécharger le billet"
-                    depsKey={a.id}
+                    downloadLabel="Imprimer le billet"
                     document={
                       <BilletDocument
                         data={{
@@ -266,10 +263,9 @@ export function DocumentsView({ eleves, config }: { eleves: Eleve[]; config: Rec
             </ul>
           </div>
         ) : section === 'carte' ? (
-          <PDFActions
+          <ImprimerBouton
             fileName={`carte-${eleve.matricule}.pdf`}
-            downloadLabel="Télécharger la carte"
-            depsKey={eleve.matricule}
+            downloadLabel="Imprimer la carte"
             document={
               <CarteDocument
                 data={{
@@ -312,10 +308,9 @@ function ConvocationForm({ eleve, config, logoUrl }: { eleve: Eleve; config: Rec
         <label className="mb-1 block text-sm font-medium text-text">Lieu</label>
         <input className="input-field" value={lieu} onChange={(e) => setLieu(e.target.value)} />
       </div>
-      <PDFActions
+      <ImprimerBouton
         fileName={`convocation-${eleve.prenom}.pdf`}
-        downloadLabel="Télécharger la convocation"
-        depsKey={`${eleve.prenom}-${objet}-${date}-${lieu}`}
+        downloadLabel="Imprimer la convocation"
         document={
           <ConvocationDocument
             data={{
