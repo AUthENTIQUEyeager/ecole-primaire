@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { School, Users, Pencil, Save, X } from 'lucide-react'
+import { School, Users, Pencil, Save, X, Plus } from 'lucide-react'
 import { classeRepo } from '@/lib/localdb/repo'
+import { ClasseForm } from './ClasseForm'
 
 interface Classe {
   id: string
@@ -19,6 +20,7 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
   const [editionId, setEditionId] = useState<string | null>(null)
   const [enseignant, setEnseignant] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
+  const [afficherForm, setAfficherForm] = useState(false)
 
   function commencerEdition(c: Classe) {
     setEditionId(c.id)
@@ -33,6 +35,11 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
 
   return (
     <div className="space-y-3">
+      <div className="flex justify-end">
+        <button className="btn-primary" onClick={() => setAfficherForm(true)}>
+          <Plus size={16} /> Ajouter une classe
+        </button>
+      </div>
       {erreur && <p className="text-sm text-danger">{erreur}</p>}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {classes.map((c) => (
@@ -87,6 +94,13 @@ export function ClassesGrid({ classes }: { classes: Classe[] }) {
         </div>
       ))}
       </div>
+      {afficherForm && (
+        <ClasseForm
+          nomsExistants={classes.map((c) => c.nom)}
+          onClose={() => setAfficherForm(false)}
+          onSuccess={() => setAfficherForm(false)}
+        />
+      )}
     </div>
   )
 }

@@ -69,6 +69,24 @@ export const eleveRepo = {
 // ---------------------------------------------------------------------------
 
 export const classeRepo = {
+  async create(payload: { nom: string; effectif_max?: number; enseignant_principal?: string }) {
+    const id = genererId()
+    const config = localDB ? Object.fromEntries((await localDB.config.toArray()).map((c) => [c.key, c.value])) : {}
+    const anneeScolaire = config.annee_scolaire ?? new Date().getFullYear().toString()
+
+    if (localDB) {
+      await localDB.classes.put({
+        ...payload,
+        id,
+        effectif_max: payload.effectif_max ?? 40,
+        annee_scolaire: anneeScolaire,
+      } as any)
+    }
+
+    const res = await mutate({ endpoint: '/api/classes', method: 'POST', operation: 'INSERT', payload: { ...payload, id } })
+    return { id, queued: !!res?.queued, error: !!res?.error, details: res?.details }
+  },
+
   async updateEnseignant(id: string, enseignant_principal: string | undefined) {
     if (localDB) await localDB.classes.update(id, { enseignant_principal })
     const res = await mutate({

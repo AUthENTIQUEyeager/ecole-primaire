@@ -99,6 +99,12 @@ export const classeUpdateSchema = z.object({
   enseignant_principal: z.string().optional(),
 })
 
+export const classeCreateSchema = z.object({
+  nom: z.enum(['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2']),
+  effectif_max: z.number().int().positive().optional(),
+  enseignant_principal: z.string().optional(),
+})
+
 export const evenementSchema = z.object({
   nom: z.string().min(1),
   type: z.enum(['sortie', 'cloture', 'autre']),
