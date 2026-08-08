@@ -1,0 +1,10 @@
+# Secrets — ne jamais committer
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Dépendances et builds — régénérés automatiquement
+**/node_modules/
+**/.next/
+**/out/
+**/src-tauri/target/
