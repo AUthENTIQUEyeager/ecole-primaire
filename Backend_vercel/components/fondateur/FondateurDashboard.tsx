@@ -27,7 +27,7 @@ export function FondateurDashboard({ stats }: { stats: Stats }) {
       <header className="flex items-center justify-between border-b border-border bg-surface px-6 py-4">
         <div>
           <h1 className="text-lg font-semibold text-text">Tableau de bord — Fondateur</h1>
-          <p className="text-sm text-muted">Bienvenue, {session?.user?.name}</p>
+          <p className="text-sm text-muted">Bienvenue, Mme Baguemzanré</p>
         </div>
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
